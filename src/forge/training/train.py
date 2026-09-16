@@ -422,12 +422,36 @@ def run(config: dict | str, smoke: bool = False, resume: str | None = None) -> d
     if resume:
         state = load_checkpoint(resume, model, optim, sched, scaler)
 
+    # TRACKING, AND WHY IT RECORDS ITS OWN ABSENCE. This used to be a silent three-way
+    # AND: wrong backend, smoke run, or no API key, and tracking simply did not happen with
+    # nothing said about it. A run that was not tracked then looks identical to a run that
+    # was, and "there is no W&B link for this experiment" becomes unanswerable after the
+    # fact. The reason is now recorded in the run record, and the run URL with it, so the
+    # README can link an artifact instead of a URL somebody retyped.
     wb = None
-    if cfg.get("tracking", {}).get("backend") == "wandb" and not smoke and os.getenv("WANDB_API_KEY"):
+    tracking: dict[str, object] = {"backend": cfg.get("tracking", {}).get("backend")}
+    if tracking["backend"] != "wandb":
+        tracking["enabled"], tracking["reason"] = False, "tracking.backend is not wandb"
+    elif smoke:
+        tracking["enabled"], tracking["reason"] = False, "smoke run; not worth a tracked experiment"
+    elif not os.getenv("WANDB_API_KEY"):
+        tracking["enabled"], tracking["reason"] = False, "WANDB_API_KEY is not set"
+    else:
         import wandb
 
         wb = wandb.init(project=cfg["tracking"].get("project", "forge"), name=exp_id,
                         config={"model": mcfg, "training": tcfg, "data": dcfg})
+        tracking.update({
+            "enabled": True,
+            "project": cfg["tracking"].get("project", "forge"),
+            "run_name": exp_id,
+            "run_id": getattr(wb, "id", None),
+            "run_url": getattr(wb, "url", None),
+        })
+    if not tracking["enabled"]:
+        print(f"[tracking] disabled: {tracking['reason']}", flush=True)
+    else:
+        print(f"[tracking] wandb run: {tracking.get('run_url')}", flush=True)
 
     history = []
     t0 = time.time()
@@ -511,6 +535,7 @@ def run(config: dict | str, smoke: bool = False, resume: str | None = None) -> d
         "fpr_budget": fpr_budget,
         "val": val.as_dict(),
         "history": history[-20:],
+        "tracking": tracking,
     }
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     if wb:
