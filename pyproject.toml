@@ -129,7 +129,15 @@ ignore = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+# -ra reports the skip reasons in the summary. Without it a module that skips
+# itself on a missing optional dependency is invisible, which is how
+# tests/unit/test_forge_app.py stayed dead in CI while CI stayed green.
+addopts = "-q -ra"
+# The repo root, so `from api.forge_app import ...` resolves. Only src/forge is
+# an installed package (see tool.setuptools.packages.find), and api/ is a
+# top-level directory rather than a package, so without this pytest puts
+# tests/unit on sys.path and never the root.
+pythonpath = ["."]
 
 [tool.mypy]
 python_version = "3.10"

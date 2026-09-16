@@ -14,7 +14,10 @@ jobs:
         with:
           python-version: "3.10"
           cache: pip
-      - run: pip install -e ".[dev]"
+      # serve is installed so tests/unit/test_forge_app.py actually RUNS here.
+      # With only [dev], fastapi is absent, the module skips itself, and CI goes
+      # green on a file that never executed.
+      - run: pip install -e ".[dev,serve]"
       - run: ruff check src tests
       - run: pytest --cov=forge --cov-report=term-missing
 
