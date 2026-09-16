@@ -45,23 +45,67 @@ def summary(arm_key: str) -> dict:
     return json.loads((REPORTS / f"indist_{ 'baseline' if arm_key == 'A' else 'mirror' }.json").read_text())
 
 
-def collected_test_count() -> int | None:
+def parse_collected_count(text: str) -> int | None:
+    """Pull the test count out of `pytest --collect-only` output.
+
+    Separated from the subprocess call so it can be tested against real pytest output
+    without running pytest. See tests/unit/test_readme_claim_parser.py.
+
+    pytest has printed this line three different ways across versions, and at -qq it
+    does not print it at all, so the node-id count is the fallback. Returning None here
+    means the caller must report a broken check, never a passing one.
+    """
+    for pattern in (
+        r"(\d+)\s+tests?\s+collected",
+        r"collected\s+(\d+)\s+items?",
+        r"(\d+)/\d+\s+tests?\s+collected",
+    ):
+        m = re.search(pattern, text)
+        if m:
+            return int(m.group(1))
+
+    # Fallback: count the node ids themselves. One line per collected test.
+    node_ids = {
+        ln.strip() for ln in text.splitlines()
+        if "::" in ln and not ln.startswith((" ", "\t", "=", "-")) and "warning" not in ln.lower()
+    }
+    return len(node_ids) or None
+
+
+def collected_test_count() -> tuple[int | None, str]:
     """Ask pytest how many tests exist, for the badge that claims a number.
 
-    The badge is the only published figure with no artifact behind it, which is
-    precisely where an unchecked claim had been sitting. Returns None when pytest
-    cannot run, so a machine without the dev extra reports the gap instead of
-    passing quietly.
+    Returns (count, reason). reason distinguishes two things the first version of this
+    function collapsed into one None:
+
+      "unavailable"  pytest could not be launched. A machine without the dev extra is
+                     allowed to skip this check.
+      "unparsed"     pytest ran and the count could not be recovered. That is a broken
+                     check, not a missing dependency, and the caller must fail on it.
+
+    -o addopts= is load-bearing. pyproject.toml sets addopts = "-q -ra", so passing our
+    own -q made it -qq, and at -qq pytest suppresses the "N tests collected" line
+    entirely. pytest exited 0, printed no count, and the old code reported "pytest could
+    not be run" on a machine where pytest works fine. The badge was therefore never
+    checked, here or in CI. Clearing addopts makes this call independent of whatever the
+    project config happens to say today.
     """
     try:
-        out = subprocess.run(
-            [sys.executable, "-m", "pytest", "--collect-only", "-q"],
+        proc = subprocess.run(
+            [sys.executable, "-m", "pytest", "--collect-only", "-q", "-o", "addopts="],
             cwd=ROOT, capture_output=True, text=True, timeout=600,
-        ).stdout
-    except Exception:
-        return None
-    m = re.search(r"(\d+)\s+tests? collected", out)
-    return int(m.group(1)) if m else None
+        )
+    except Exception as exc:
+        return None, f"unavailable: pytest could not be launched ({exc!r})"
+
+    out = proc.stdout + proc.stderr
+    count = parse_collected_count(out)
+    if count is not None:
+        return count, "ok"
+    if proc.returncode == 4 or "no tests ran" in out.lower():
+        return None, "unavailable: pytest found no tests to collect"
+    tail = "\n".join(out.strip().splitlines()[-6:])
+    return None, f"unparsed: pytest exited {proc.returncode} and printed no count. Last lines:\n{tail}"
 
 
 def table_rows(md: str, header_fragment: str) -> dict[str, list[str]]:
@@ -219,14 +263,17 @@ def main(check_test_count: bool = True) -> int:
         bad.append("FPR budget badge does not match arm A's summary.json")
 
     tests_badge = re.search(r"Tests-(\d+)%20passing", md)
-    counted = collected_test_count() if check_test_count else None
+    counted, reason = collected_test_count() if check_test_count else (None, "skipped")
     if tests_badge is None:
         bad.append("no test-count badge found")
-    elif counted is None:
-        if check_test_count:
-            print("note: pytest could not be run, so the test-count badge was not checked")
-    elif int(tests_badge.group(1)) != counted:
-        bad.append(f"test count badge says {tests_badge.group(1)}, pytest collects {counted}")
+    elif counted is not None:
+        if int(tests_badge.group(1)) != counted:
+            bad.append(f"test count badge says {tests_badge.group(1)}, pytest collects {counted}")
+    elif reason.startswith("unparsed"):
+        # The check is broken. Saying nothing here is how it went unrun.
+        bad.append(f"the test-count badge check did not work: {reason}")
+    elif reason.startswith("unavailable"):
+        print(f"note: the test-count badge was not checked. {reason}")
 
     # ---- the one prose number worth pinning ---------------------------------
     # It is the whole argument of the RAID paragraph, so it gets checked like a table.
