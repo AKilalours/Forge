@@ -29,6 +29,7 @@ ARMS = {"A": "baseline", "B": "mirror"}
 
 
 def load(name: str) -> dict:
+    """name may include a subdirectory, e.g. "scaling/scaling_summary.json"."""
     return json.loads((REPORTS / name).read_text())
 
 
@@ -148,6 +149,65 @@ def main(check_test_count: bool = True) -> int:
             published = ind[row_key][i]
             if not close(published, stored, percent=pct):
                 bad.append(f"in-distribution {label} {arm_key}: README {published!r} vs artifact {stored!r}")
+
+    # ---- performance tables --------------------------------------------------
+    # Added when the A100 runs landed. Without this the three performance tables would
+    # be the only published numbers in the README with no gate behind them, which is
+    # the exact hole this script was written to close for the evaluation tables.
+    prof = load("profile/train_step_comparison.json")
+    steps = table_rows(md, "| Arm | Median step |")
+    for row_key, arm in [("gradient checkpointing on", "grad_ckpt_on"),
+                         ("gradient checkpointing off", "grad_ckpt_off")]:
+        row, cell = steps[row_key], prof["arms"][arm]
+        for label, published, stored in [
+            ("median step", row[0], cell["median_step_ms"]),
+            ("p90 step", row[1], cell["p90_step_ms"]),
+            ("peak memory", row[2], cell["peak_memory_gib"]),
+        ]:
+            if not close(published.split()[0], float(stored)):
+                bad.append(f"{arm} {label}: README {published!r} vs artifact {stored!r}")
+
+    # The op-share table reads the ranked list from the checkpointing-off arm, which is
+    # the arm the README says it is reading.
+    shares = {e["op"]: e["share"] for e in prof["arms"]["grad_ckpt_off"]["top"]}
+    ops = table_rows(md, "| Operation | Share of device time |")
+    for row_key, cells in ops.items():
+        op = row_key.strip("`")
+        if op not in shares:
+            bad.append(f"op share: README names {op!r}, which is not in the profile's ranked list")
+            continue
+        if not close(cells[0], shares[op], percent=True):
+            bad.append(f"op share {op}: README {cells[0]!r} vs artifact {shares[op]!r}")
+
+    # ---- scaling table --------------------------------------------------------
+    scal = {r["world_size"]: r for r in load("scaling/scaling_summary.json")["rows"]}
+    sc = table_rows(md, "| GPUs | Examples/s |")
+    for row_key, cells in sc.items():
+        ws = int(row_key)
+        r = scal[ws]
+        for label, published, stored, pct in [
+            ("examples/s", cells[0], r["examples_per_second"], False),
+            ("tokens/s", cells[1].replace(",", ""), r["tokens_per_second"], False),
+            ("s/step", cells[2], r["seconds_per_step"], False),
+            ("peak GiB", cells[3], r["peak_memory_gib"], False),
+            ("speedup", cells[4], r["speedup"], False),
+            ("efficiency", cells[5], r["scaling_efficiency"], True),
+        ]:
+            if not close(published, float(stored), percent=pct):
+                bad.append(f"scaling ws={ws} {label}: README {published!r} vs artifact {stored!r}")
+
+    # The two prose numbers the performance section argues from. Read from the artifact's
+    # own stated cost rather than recomputed here, so there is one source for the figure.
+    trade = prof["gradient_checkpointing_cost"]
+    cost, saved = trade["step_time_overhead"] * 100, trade["memory_saved_gib"]
+    m = re.search(r"\*\*\+([\d.]+)% step time\*\* to save \*\*([\d.]+) GiB\*\*", md)
+    if not m:
+        bad.append("the checkpointing trade sentence is missing from the README")
+    else:
+        if not close(m.group(1), cost):
+            bad.append(f"checkpointing time cost: README {m.group(1)!r} vs computed {cost!r}")
+        if not close(m.group(2), saved):
+            bad.append(f"checkpointing memory saved: README {m.group(2)!r} vs computed {saved!r}")
 
     # ---- badges --------------------------------------------------------------
     auroc_badge = re.search(r"In--distribution%20AUROC-([\d.]+)-", md)

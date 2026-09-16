@@ -13,6 +13,11 @@ training:
   epochs: 3
   seed: 42
   precision: bf16
-  gradient_checkpointing: true
+  # MEASURED, not assumed. scripts/profile_train_step.py on an A100-SXM4-80GB at these
+  # exact shapes (batch 32, seq 512, bf16, deberta-v3-base): checkpointing on is 585.81 ms
+  # per step and 4.94 GiB peak; off is 471.84 ms and 22.68 GiB. It costs +24.15% step time
+  # to save 17.74 GiB, and 22.68 GiB is not a number an 80 GB card has to care about.
+  # Off here. Needs a >=40 GiB card. See reports/experiments/profile/train_step_comparison.json.
+  gradient_checkpointing: false
 distributed: { strategy: fsdp, sharding: full_shard }
 tracking: { backend: wandb, project: forge }

@@ -65,6 +65,10 @@ training:
   epochs: 2
   seed: 42
   precision: bf16
+  # On here, deliberately, and it is the slower setting: +24.15% step time for 17.74 GiB
+  # saved, measured in reports/experiments/profile/train_step_comparison.json. The minimal
+  # configs are the reproduce-on-a-modest-GPU path, so they buy the memory. The full-scale
+  # configs (baseline.yaml, mirror.yaml) turn it off.
   gradient_checkpointing: true
   token_loss_weight: 0.5
   num_workers: 4

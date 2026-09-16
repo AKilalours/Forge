@@ -114,6 +114,81 @@ tail without moving the ranking. On MAGE it did nothing at all.
 
 ---
 
+## ⚡ Making It Go Faster, Measured
+
+Everything above is about whether the detector is *right*. This section is about what it
+costs to train, and every number in it was produced by a script in this repo on rented
+A100s, not estimated.
+
+### Gradient checkpointing was costing more than it was worth
+
+`scripts/profile_train_step.py` runs the model step, forward through optimizer, at the
+exact shapes `configs/training/baseline.yaml` uses: batch 32, sequence 512, bf16,
+DeBERTa-v3-base. Two arms, one variable.
+
+| Arm | Median step | p90 step | Peak memory |
+|---|---|---|---|
+| Gradient checkpointing on | 585.81 ms | 587.00 ms | 4.94 GiB |
+| Gradient checkpointing off | 471.84 ms | 472.01 ms | 22.68 GiB |
+
+Checkpointing costs **+24.15% step time** to save **17.74 GiB**. On an 80 GiB card that
+is paying a quarter of the training budget for memory nothing was asking for, so the
+full-scale configs now set it to `false` and say why in a comment. The minimal configs
+keep it on deliberately: they are the reproduce-on-a-modest-GPU path, and there the
+17.74 GiB is the whole point. A flag is not good or bad, it is a trade with a price, and
+the price is now written down.
+
+### The bottleneck is not the attention math
+
+Ranked by self device time, checkpointing off:
+
+| Operation | Share of device time |
+|---|---|
+| `aten::scatter_add_` | 20.87% |
+| `aten::copy_` | 3.92% |
+| `aten::bmm` | 2.34% |
+| `aten::mm` | 2.13% |
+| `aten::gather` | 1.5% |
+
+The two matrix multiplies together are **4.47%**. One indexing op is **20.87%**, and the
+`gather` it is the backward of is another 1.5%. That pair is DeBERTa-v3's disentangled
+attention: the content-to-position and position-to-content relative indices read from a
+shared bucket table, and the backward scatters gradients back into it, 72 times per
+step. (`aten::scatter_add_` and the CUDA kernel beneath it both report 20.87%. That is
+one bottleneck seen at two levels of the stack, not two.)
+
+This is the reason `kernels/cuda/` is still empty. The plan was always to profile before
+writing a kernel, and had I skipped that step I would have written a fused attention
+kernel for something worth 4.47%. See [`docs/jd_coverage.md`](docs/jd_coverage.md) for what
+the kernel is now specified to do.
+
+### FSDP shards, and the efficiency number is not free
+
+`scripts/scaling_run.py` under `torchrun` on 1, 2 and 4 A100-SXM4-80GB. The global batch
+is pinned at 64 at every world size, with `grad_accum` absorbing the difference, because
+a scaling curve where each GPU count trains a different batch measures nothing.
+
+| GPUs | Examples/s | Tokens/s | s/step | Peak GiB | Speedup | Efficiency |
+|---|---|---|---|---|---|---|
+| 1 | 65.03 | 33,298 | 0.9841 | 13.25 | 1.00 | 100.0% |
+| 2 | 128.18 | 65,627 | 0.4993 | 11.85 | 1.97 | 98.5% |
+| 4 | 254.54 | 130,325 | 0.2514 | 10.98 | 3.91 | 97.9% |
+
+Peak memory *falls* as world size rises, from 13.25 to 10.98 GiB. That is the check that
+FSDP is sharding parameters and not quietly replicating them, and it is worth more than
+the throughput column.
+
+> **The caveat, before anyone else finds it.** The 1-GPU baseline runs `grad_accum=4` to
+> hold the global batch at 64, so it pays four micro-steps of overhead against the 4-GPU
+> arm's one. That flatters the speedup. Holding the global batch fixed is the honest way
+> to run this comparison, and this is what it costs. 97.9% is a real number with a known
+> bias, not a clean one.
+
+Records: [`reports/experiments/profile/`](reports/experiments/profile) and
+[`reports/experiments/scaling/`](reports/experiments/scaling).
+
+---
+
 ## 🖥️ The Interface
 
 Two shells over the same detectors: a FastAPI reference page and a Streamlit page that is
@@ -322,6 +397,7 @@ Nothing here is typed in by hand.
 |---|---|
 | Backbone | `microsoft/deberta-v3-base` |
 | Training | PyTorch, bf16, NVIDIA RTX 4090 on RunPod, ~21 min per arm |
+| Scaling and profiling | FSDP (`FULL_SHARD`) under `torchrun`, `torch.profiler`, 4x A100-SXM4-80GB on RunPod |
 | Corpus | FineWeb / FineWeb-Edu, MinHash dedup, source-group splits |
 | Benchmarks | HC3 · MAGE · RAID, evaluation-only |
 | Statistics | paired bootstrap (10k resamples), McNemar at a matched budget |

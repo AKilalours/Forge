@@ -21,8 +21,8 @@ so they were removed rather than left raising.
 | 1 | Python and modern ML frameworks | whole `src/forge` tree, PyTorch + HF Transformers | 3 | scaffolded |
 | 2 | Transformers and LLM fundamentals | `modeling/encoder.py` (encoder + dual head), `modeling/windowing.py` (overlapping windows), `generation/` (decoding grid, sampling) | 3 | windowing implemented and tested; model planned |
 | 3 | Research and engineering boundaries | `docs/data_spec_v1.md` (frozen contract), `evaluation/release_gate.py`, `configs/eval/regimes.yaml` | 0 | **implemented** |
-| 4 | NVIDIA GPU programming and CUDA | `infra/docker/Dockerfile.train` (CUDA 12.4 base), `kernels/cuda/` | 7 | planned |
-| 5 | Distributed training (DeepSpeed, FSDP, Ray) | `training/distributed.py`: FSDP, DeepSpeed ZeRO-3 and Ray config generators, pure functions, tested. `build()` refuses to construct a live process group without the hardware. | 7 | configs implemented and tested; **never run** |
+| 4 | NVIDIA GPU programming and CUDA | `training/profiling.py` + `scripts/profile_train_step.py`, run on an A100-80GB. Ranked device time committed at `reports/experiments/profile/`. The target is named by measurement, not by guess: `aten::scatter_add_` is **20.87%** of device time, against **4.47%** for `bmm` and `mm` combined. `kernels/cuda/` is still empty. | 7 | profiling **implemented and run**; kernel **not written** |
+| 5 | Distributed training (DeepSpeed, FSDP, Ray) | `training/distributed.py`: `build()` now constructs a real FSDP model (FULL_SHARD, bf16 `MixedPrecision`, transformer auto-wrap found off the `ModuleList` rather than hardcoded). `scripts/scaling_run.py` under `torchrun` on 1, 2 and 4 A100s: **98.5%** efficiency at 2, **97.9%** at 4, with the global batch held at 64 by `grad_accum` so every world size does the same work. DeepSpeed and Ray remain config generators only. | 7 | FSDP **implemented and run**; DeepSpeed/Ray still **never run** |
 | 6 | Inference frameworks (vLLM) | `generation/generators/base.py`: two-pass scheduler holding one engine at a time, GPU preflight, explicit allocator teardown, scheduler invariants under test. Single GPU. | 2 | **implemented** |
 | 7 | Large-scale data processing (Spark, Beam) | `cleaning/pipeline.py` on Polars and PyArrow, one machine. **No Spark and no Beam in this repo.** | 1 | Polars path implemented; Spark/Beam **absent** |
 | 8 | Orchestration (Airflow) | **Not in this repo.** See the note below. | 8 | **absent** |
@@ -34,12 +34,25 @@ so they were removed rather than left raising.
 
 ## The honest version of each claim
 
-**CUDA (#4).** The defensible target is one thing done properly, not a fake kernel.
-Two candidates, both real work: a fused windowing-plus-tokenization preprocessing
-kernel, or a profiled attention path where a measured bottleneck is fixed and the
-before/after trace is committed. Phase 7 picks one after profiling says which is
-actually the bottleneck. Writing a CUDA kernel for a stage that is 3 percent of step
-time is resume decoration, not engineering.
+**CUDA (#4).** The rule was: profile first, then write the kernel the profile asks
+for. The profile has now been run, on an A100-80GB at the shapes
+`configs/training/baseline.yaml` actually uses, and it gave an answer I did not
+expect. `aten::scatter_add_` is **20.87%** of device time. Its CUDA kernel,
+`_scatter_gather_elementwise_kernel`, is the same 20.87% seen one level down, so that is
+one bottleneck and not two. The matrix multiplies, `bmm` at 2.34% and `mm` at 2.13%, are
+**4.47%** together. The attention math is not the bottleneck; the *indexing around it*
+is. That op is the backward of the `gather` in
+DeBERTa-v3's disentangled attention, where the content-to-position and
+position-to-content relative indices gather from a shared bucket table, and the
+backward scatters gradients back into it with `ReduceAdd` over 72 calls per step.
+
+So the kernel is now specified rather than speculated about: fuse the c2p/p2c index
+construction and its scatter-add so the bucket table is written once per layer instead
+of gathered and scattered twice. That is the Phase 7 deliverable, and it is not written
+yet. What is committed is the measurement that names it, at
+`reports/experiments/profile/train_step_comparison.json`. Writing a CUDA kernel for a
+stage that is 3 percent of step time is resume decoration, not engineering, and it
+would have been exactly what I did without this profile.
 
 **vLLM (#6).** vLLM belongs on the generation side, where FORGE decodes hundreds of
 thousands of documents from open-weight models and continuous batching genuinely
