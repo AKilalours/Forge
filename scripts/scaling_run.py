@@ -1,9 +1,13 @@
-"""Measure FSDP training throughput at one world size. Launched by torchrun.
+"""Measure training throughput for one strategy at one world size. Launched by torchrun.
 
-    torchrun --nproc_per_node=1 scripts/scaling_run.py
-    torchrun --nproc_per_node=2 scripts/scaling_run.py
-    torchrun --nproc_per_node=4 scripts/scaling_run.py
-    python scripts/scaling_run.py --summarise
+    torchrun --nproc_per_node=1 scripts/scaling_run.py --strategy fsdp
+    torchrun --nproc_per_node=2 scripts/scaling_run.py --strategy fsdp
+    torchrun --nproc_per_node=4 scripts/scaling_run.py --strategy fsdp
+    torchrun --nproc_per_node=2 scripts/scaling_run.py --strategy deepspeed
+    python scripts/scaling_run.py --summarise --strategy fsdp
+
+Run records are named <strategy>_ws<N>.json so two strategies cannot overwrite each
+other's measurements, which is a mistake you discover only when the numbers look odd.
 
 THE INVARIANT THIS HARNESS EXISTS TO HOLD. Every world size runs the SAME global batch,
 with gradient accumulation absorbing the difference, because a comparison run at two
@@ -31,12 +35,12 @@ SEQ_LEN = 512                 # configs/models/forge_base.yaml
 BACKBONE = "microsoft/deberta-v3-base"
 
 
-def measure(steps: int) -> dict:
+def measure(steps: int, strategy: str = "fsdp") -> dict:
     import torch
     import torch.distributed as dist
 
     from forge.modeling.encoder import ForgeConfig, build_model
-    from forge.training.distributed import DistConfig, build
+    from forge.training.distributed import DistConfig, build_run
     from forge.training.scaling import (
         ThroughputMeasurement,
         assert_global_batch_invariant,
@@ -51,7 +55,7 @@ def measure(steps: int) -> dict:
 
     accum = grad_accum_for_world_size(TARGET_GLOBAL_BATCH, PER_DEVICE_BATCH, world_size)
     cfg = DistConfig(
-        strategy="fsdp", world_size=world_size, per_device_batch=PER_DEVICE_BATCH,
+        strategy=strategy, world_size=world_size, per_device_batch=PER_DEVICE_BATCH,
         grad_accum=accum, precision="bf16", gradient_checkpointing=False,
     )
     # Reject a broken matrix here rather than after producing a speedup number.
@@ -62,9 +66,15 @@ def measure(steps: int) -> dict:
 
     torch.manual_seed(42)
     model = build_model(ForgeConfig(backbone=BACKBONE, max_length=SEQ_LEN)).cuda()
-    model = build(cfg, model)
+    # DeepSpeed builds its own optimizer from the config it is handed, so constructing one
+    # here and passing it in would create two and silently step the wrong one.
+    optimizer = (
+        None if strategy == "deepspeed"
+        else torch.optim.AdamW(model.parameters(), lr=2e-5, weight_decay=0.01)
+    )
+    run = build_run(cfg, model, optimizer=optimizer, lr=2e-5)
+    model = run.model
     model.train()
-    optimizer = torch.optim.AdamW(model.parameters(), lr=2e-5, weight_decay=0.01)
 
     g = torch.Generator(device="cpu").manual_seed(42 + rank)
     vocab = 128100  # deberta-v3-base
@@ -77,13 +87,26 @@ def measure(steps: int) -> dict:
     }
 
     def one_step():
-        optimizer.zero_grad(set_to_none=True)
-        for _ in range(accum):   # the accumulation that holds the global batch fixed
-            with torch.autocast("cuda", dtype=torch.bfloat16):
+        """One GLOBAL batch. The loop is identical for both strategies on purpose.
+
+        run.micro_step owns the difference between them: who scales the loss by
+        grad_accum and who decides when the optimizer actually moves. Writing that
+        difference out here is how a benchmark ends up comparing two different
+        experiments while reporting a plausible number. See DistributedRun.
+        """
+        if strategy != "deepspeed":
+            optimizer.zero_grad(set_to_none=True)
+        for _ in range(accum):
+            if strategy == "deepspeed":
+                # The engine handles bf16 itself; an autocast context on top of it casts
+                # twice and muddies what the measurement is of.
                 out = model(batch["input_ids"], batch["attention_mask"],
                             batch["doc_labels"], batch["token_labels"])
-            (out["loss"] / accum).backward()
-        optimizer.step()
+            else:
+                with torch.autocast("cuda", dtype=torch.bfloat16):
+                    out = model(batch["input_ids"], batch["attention_mask"],
+                                batch["doc_labels"], batch["token_labels"])
+            run.micro_step(out["loss"])
 
     for _ in range(3):
         one_step()
@@ -104,7 +127,7 @@ def measure(steps: int) -> dict:
     )
     result = {
         "world_size": world_size,
-        "strategy": "fsdp",
+        "strategy": strategy,
         "per_device_batch": PER_DEVICE_BATCH,
         "grad_accum": accum,
         "global_batch_size": cfg.global_batch_size,
@@ -121,21 +144,22 @@ def measure(steps: int) -> dict:
     }
     if rank == 0:
         OUT.mkdir(parents=True, exist_ok=True)
-        (OUT / f"ws{world_size}.json").write_text(json.dumps(result, indent=1) + "\n")
+        (OUT / f"{strategy}_ws{world_size}.json").write_text(json.dumps(result, indent=1) + "\n")
         print(json.dumps(result, indent=1), flush=True)
     dist.destroy_process_group()
     return result
 
 
-def summarise() -> int:
+def summarise(strategy: str = "fsdp") -> int:
     from forge.training.scaling import ScalingError, ThroughputMeasurement, scaling_efficiency
 
     runs = {}
-    for f in sorted(OUT.glob("ws*.json")):
+    for f in sorted(OUT.glob(f"{strategy}_ws*.json")):
         d = json.loads(f.read_text())
         runs[d["world_size"]] = d
     if 1 not in runs:
-        print("no ws1.json: the single-GPU baseline is what every efficiency is measured against")
+        print(f"no {strategy}_ws1.json: the single-GPU baseline is what every "
+              "efficiency is measured against")
         return 1
 
     def tm(d):
@@ -164,7 +188,7 @@ def summarise() -> int:
         })
 
     out = {
-        "strategy": "fsdp",
+        "strategy": strategy,
         "device_name": runs[1]["device_name"],
         "global_batch_size": runs[1]["global_batch_size"],
         "seq_len": runs[1]["seq_len"],
@@ -177,7 +201,8 @@ def summarise() -> int:
         ),
         "rows": rows,
     }
-    path = OUT / "scaling_summary.json"
+    path = OUT / ("scaling_summary.json" if strategy == "fsdp"
+                  else f"scaling_summary_{strategy}.json")
     path.write_text(json.dumps(out, indent=1) + "\n")
     print(f"{'ws':>3} {'ex/s':>9} {'tok/s':>11} {'s/step':>8} {'peak GiB':>9} "
           f"{'speedup':>8} {'efficiency':>11}")
@@ -194,5 +219,8 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--steps", type=int, default=12)
     ap.add_argument("--summarise", action="store_true")
+    ap.add_argument("--strategy", default="fsdp", choices=("fsdp", "deepspeed"))
     a = ap.parse_args()
-    raise SystemExit(summarise() if a.summarise else (measure(a.steps) and 0))
+    raise SystemExit(
+        summarise(a.strategy) if a.summarise else (measure(a.steps, a.strategy) and 0)
+    )

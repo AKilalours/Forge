@@ -161,6 +161,102 @@ def _transformer_layer_class(model):
     return None
 
 
+
+class DistributedRun:
+    """One training step's worth of behaviour, so the harness cannot get it wrong.
+
+    WHY THIS EXISTS, AND IT IS NOT STYLE. FSDP and DeepSpeed divide the work of a
+    gradient-accumulation step differently, and the difference is silent when you get it
+    wrong:
+
+      FSDP      you scale the loss by 1/accum yourself, call loss.backward() every
+                micro-batch, and call optimizer.step() once at the boundary.
+      DeepSpeed the engine owns accumulation. You call engine.backward(raw_loss) and
+                engine.step() every micro-batch, and the engine scales by
+                gradient_accumulation_steps internally and no-ops the optimizer until the
+                boundary.
+
+    Write the FSDP loop and point it at a DeepSpeed engine and you scale the loss twice,
+    so the effective learning rate is off by a factor of accum. Write the DeepSpeed loop
+    and point it at FSDP and you take accum optimizer steps per batch, so the global batch
+    is actually per_device_batch and every number in the comparison is wrong. Neither
+    raises. Both produce a plausible throughput figure, which is the worst outcome for a
+    benchmark whose entire purpose is comparing two strategies fairly.
+
+    forge.training.scaling exists to stop the global batch drifting between world sizes.
+    This class is the same guarantee across STRATEGIES: the caller feeds micro-batch
+    losses and never touches the optimizer, so there is one place the semantics live.
+    """
+
+    def __init__(self, model, strategy: str, grad_accum: int, optimizer=None, engine=None):
+        self.model = model
+        self.strategy = strategy
+        self.grad_accum = grad_accum
+        self.optimizer = optimizer
+        self._engine = engine
+        self._seen = 0
+
+    @property
+    def scales_loss_internally(self) -> bool:
+        """True when the backend divides by grad_accum for you. Dividing again is the bug."""
+        return self.strategy == "deepspeed"
+
+    def micro_step(self, loss) -> bool:
+        """Consume one micro-batch's RAW, unscaled loss. True when the optimizer stepped.
+
+        Pass the loss as the model returned it. Scaling is this method's job precisely
+        because getting it wrong is invisible.
+        """
+        if self.strategy == "deepspeed":
+            self._engine.backward(loss)      # scales by grad_accum itself
+            self._engine.step()              # no-ops until the accumulation boundary
+            self._seen += 1
+            return bool(self._engine.is_gradient_accumulation_boundary())
+
+        (loss / self.grad_accum).backward()
+        self._seen += 1
+        if self._seen % self.grad_accum:
+            return False
+        if self.optimizer is not None:
+            self.optimizer.step()
+            self.optimizer.zero_grad(set_to_none=True)
+        return True
+
+
+def build_run(cfg: DistConfig, model, optimizer=None, lr: float = 2e-5) -> DistributedRun:
+    """Construct the strategy in `cfg` and return the object that drives its steps.
+
+    This is the interface a benchmark should use. `build()` below returns a bare model,
+    which is honest for FSDP and impossible for DeepSpeed, where deepspeed.initialize()
+    returns an engine that owns the optimizer, the scheduler and the accumulation
+    boundary. A function that returned only the model would be discarding the half of
+    DeepSpeed that matters and leaving the caller to reinvent it.
+    """
+    if cfg.strategy in ("none", "fsdp"):
+        return DistributedRun(
+            model=build(cfg, model), strategy=cfg.strategy,
+            grad_accum=cfg.grad_accum, optimizer=optimizer,
+        )
+    if cfg.strategy != "deepspeed":
+        raise NotImplementedError(
+            f"strategy {cfg.strategy!r} has a config generator here but no launcher. "
+            "ray_scaling_config feeds Ray Train, which runs this whole script as a worker "
+            "rather than wrapping the model, so it does not belong behind this call."
+        )
+
+    import deepspeed  # noqa: PLC0415 - optional [dist] extra, absent on CPU machines
+
+    conf = deepspeed_config(cfg, lr=lr)
+    engine, ds_optimizer, _, _ = deepspeed.initialize(
+        model=model,
+        model_parameters=[p for p in model.parameters() if p.requires_grad],
+        config=conf,
+    )
+    return DistributedRun(
+        model=engine, strategy="deepspeed", grad_accum=cfg.grad_accum,
+        optimizer=ds_optimizer, engine=engine,
+    )
+
 def build(cfg: DistConfig, model, optimizer=None):  # pragma: no cover - needs >1 GPU
     """Wrap `model` in the strategy `cfg` names. Returns the wrapped model.
 
