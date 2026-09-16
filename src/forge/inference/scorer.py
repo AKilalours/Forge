@@ -39,6 +39,11 @@ from forge.common.config import load
 from forge.inference.decision import DecisionPolicy
 
 ARMS = ("baseline", "mirror")
+
+# The batch size the serving path uses, in windows. Named rather than inline so
+# tests/unit/test_serving_batch_size.py can check it against the committed measurement
+# instead of the two drifting apart silently.
+SERVING_BATCH_WINDOWS = 8
 ARM_LABEL = {"baseline": "A: random synthetic", "mirror": "B: matched mirrors"}
 
 
@@ -89,8 +94,14 @@ class Arm:
                 "windowing produced no features; the text is shorter than one token"
             )
 
+        # MEASURED, and it used to be 32. reports/experiments/inference/cpu_latency.json
+        # sweeps batch size on the CPU path that actually deploys: throughput is flat
+        # within 13% from batch 1 to 16 and DEGRADES at 32, which was the worst point in
+        # the sweep. Batch 32 also makes one request wait 15.8s instead of 3.2s for no
+        # throughput in return. The old value was never measured; it was the number that
+        # looks right for a GPU.
         loader = DataLoader(
-            feats, batch_size=32, shuffle=False,
+            feats, batch_size=SERVING_BATCH_WINDOWS, shuffle=False,
             collate_fn=Collator(self.tokenizer, max_length=self.mcfg["max_length"]),
         )
         self.model.eval()

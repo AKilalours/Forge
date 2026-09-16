@@ -21,7 +21,11 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class BatchPolicy:
-    max_batch: int = 32
+    # 8, not 32, and measured. See reports/experiments/inference/cpu_latency.json: on the
+    # CPU path FORGE deploys on, throughput is flat within 13% from batch 1 to 16 and gets
+    # WORSE at 32. A dynamic batcher whose max_batch sits past the point where batching
+    # stops paying adds latency to every request and buys nothing back.
+    max_batch: int = 8
     max_wait_ms: int = 10
     max_queue: int = 1000
 

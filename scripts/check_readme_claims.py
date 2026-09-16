@@ -100,6 +100,20 @@ def collected_test_count() -> tuple[int | None, str]:
 
     out = proc.stdout + proc.stderr
     count = parse_collected_count(out)
+
+    # A collection ERROR makes the count a lie rather than a number. pytest still prints
+    # "N tests collected" alongside "M errors during collection", and N is only the
+    # modules that happened to import. Reporting it would compare the badge against
+    # whatever a broken environment managed to load, and on a machine missing the project
+    # that is a small number that looks like a real answer. Exit 0 is the only trustworthy
+    # collection.
+    if proc.returncode != 0:
+        detail = "collection errors" if count is not None else "pytest reported a problem"
+        return None, (
+            f"unavailable: pytest exited {proc.returncode} ({detail}), so any count it "
+            "printed reflects what imported, not what exists"
+        )
+
     if count is not None:
         return count, "ok"
     if proc.returncode == 4 or "no tests ran" in out.lower():
@@ -252,6 +266,34 @@ def main(check_test_count: bool = True) -> int:
             bad.append(f"checkpointing time cost: README {m.group(1)!r} vs computed {cost!r}")
         if not close(m.group(2), saved):
             bad.append(f"checkpointing memory saved: README {m.group(2)!r} vs computed {saved!r}")
+
+    # ---- inference sweep ------------------------------------------------------
+    # Published with the table, not in a later commit. Publishing numbers first and
+    # gating them afterwards is how the evaluation tables went unchecked for months.
+    inf_path = REPORTS / "inference" / "cpu_latency.json"
+    if inf_path.exists():
+        inf = {r["batch_windows"]: r for r in json.loads(inf_path.read_text())["batch_sweep"]}
+        sweep = table_rows(md, "| Batch (windows) | Median |")
+        for row_key, cells in sweep.items():
+            b = int(row_key)
+            if b not in inf:
+                bad.append(f"inference table has batch {b}, which the artifact does not")
+                continue
+            r = inf[b]
+            for label, published, stored in [
+                ("median", cells[0].replace(" ms", ""), r["median_ms"]),
+                ("p95", cells[1].replace(" ms", ""), r["p95_ms"]),
+                ("windows/s", cells[2], r["windows_per_second"]),
+                ("samples", cells[3], r["samples"]),
+            ]:
+                if not close(published, float(stored)):
+                    bad.append(f"inference batch {b} {label}: README {published!r} vs "
+                               f"artifact {stored!r}")
+    else:
+        bad.append(
+            "README publishes an inference sweep but reports/experiments/inference/"
+            "cpu_latency.json is not committed"
+        )
 
     # ---- badges --------------------------------------------------------------
     auroc_badge = re.search(r"In--distribution%20AUROC-([\d.]+)-", md)

@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Tests-930%20passing-00C853?style=for-the-badge"/>
+  <img src="https://img.shields.io/badge/Tests-934%20passing-00C853?style=for-the-badge"/>
   <img src="https://img.shields.io/badge/In--distribution%20AUROC-0.99997-00C853?style=for-the-badge"/>
   <img src="https://img.shields.io/badge/FPR%20budget-0.1%25-0056D2?style=for-the-badge"/>
   <img src="https://img.shields.io/badge/Headline-Partial%20null%20result-FF8F00?style=for-the-badge"/>
@@ -184,8 +184,51 @@ the throughput column.
 > to run this comparison, and this is what it costs. 97.9% is a real number with a known
 > bias, not a clean one.
 
-Records: [`reports/experiments/profile/`](reports/experiments/profile) and
-[`reports/experiments/scaling/`](reports/experiments/scaling).
+
+### The serving path is not batch-bound, and the code assumed it was
+
+Everything above is training. Serving is a different machine: FORGE deploys on CPU in
+float32, scoring 512-token windows. `scripts/benchmark_inference.py` sweeps batch size on
+that path.
+
+| Batch (windows) | Median | p95 | Windows/s | Samples |
+|---|---|---|---|---|
+| 1 | 452.7 ms | 472.6 ms | 2.21 | 7 |
+| 2 | 848.2 ms | 890.9 ms | 2.36 | 7 |
+| 4 | 1715.8 ms | 1991.4 ms | 2.33 | 7 |
+| 8 | 3201.7 ms | 3363.4 ms | **2.50** | 7 |
+| 16 | 6399.8 ms | 6916.9 ms | 2.50 | 4 |
+| 32 | 15794.8 ms | 17571.6 ms | 2.03 | 3 |
+
+Throughput is flat within 13% from batch 1 to 16. **Batching is not the lever on this
+path.** It is a GPU optimisation, and this path has no GPU.
+
+Worse, `scorer.py` hardcoded `batch_size=32` and `BatchPolicy` defaulted `max_batch=32`.
+Batch 32 is the slowest point in the sweep, below batch 1, while making a single request
+wait 15.8 seconds instead of 3.2. The code was paying five times the latency for negative
+throughput. Neither number had ever been measured; both were the value that looks right
+for a GPU. Both are now 8, and
+[`tests/unit/test_serving_batch_size.py`](tests/unit/test_serving_batch_size.py) reads the
+committed artifact and fails if the constant and the measurement ever disagree again.
+
+`forge/inference/batching.py` says its wait window is tuned "against the P95 latency
+budget in the release gate". Until this sweep, no P95 had ever been measured, so two
+modules were citing a budget that had no artifact behind it. There is one now.
+
+> **Two caveats, before anyone else finds them.** `torch_threads` was 4 on the machine
+> that produced this. On a compute-bound CPU forward, thread count is a larger lever than
+> batch size, so the absolute figures are probably understated; the batch comparison holds
+> because every point ran under the same thread count. And batch 32 got 3 samples under
+> the sweep's per-point time budget, so treat the size of its degradation as approximate
+> and its direction as real. The artifact records the sample count per row for exactly
+> this reason.
+
+**Scope.** This times the model forward over pre-tokenised windows. Tokenisation,
+windowing and HTTP are not included, so a real request costs this plus those.
+
+Records: [`reports/experiments/profile/`](reports/experiments/profile),
+[`reports/experiments/scaling/`](reports/experiments/scaling) and
+[`reports/experiments/inference/`](reports/experiments/inference).
 
 ---
 
