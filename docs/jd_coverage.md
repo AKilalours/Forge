@@ -24,7 +24,7 @@ so they were removed rather than left raising.
 | 4 | NVIDIA GPU programming and CUDA | `training/profiling.py` + `scripts/profile_train_step.py`, run on an A100-80GB. Ranked device time committed at `reports/experiments/profile/`. The target is named by measurement, not by guess: `aten::scatter_add_` is **20.87%** of device time, against **4.47%** for `bmm` and `mm` combined. `kernels/cuda/` is still empty. | 7 | profiling **implemented and run**; kernel **not written** |
 | 5 | Distributed training (DeepSpeed, FSDP, Ray) | `training/distributed.py`: `build()` now constructs a real FSDP model (FULL_SHARD, bf16 `MixedPrecision`, transformer auto-wrap found off the `ModuleList` rather than hardcoded). `scripts/scaling_run.py` under `torchrun` on 1, 2 and 4 A100s: **98.5%** efficiency at 2, **97.9%** at 4, with the global batch held at 64 by `grad_accum` so every world size does the same work. DeepSpeed and Ray remain config generators only. | 7 | FSDP **implemented and run**; DeepSpeed/Ray still **never run** |
 | 6 | Inference frameworks (vLLM) | `generation/generators/base.py`: two-pass scheduler holding one engine at a time, GPU preflight, explicit allocator teardown, scheduler invariants under test. Single GPU. | 2 | **implemented** |
-| 7 | Large-scale data processing (Spark, Beam) | `cleaning/pipeline.py` on Polars and PyArrow, one machine. **No Spark and no Beam in this repo.** | 1 | Polars path implemented; Spark/Beam **absent** |
+| 7 | Large-scale data processing (Spark, Beam) | `hard_negative/spark_scan.py`: the reserve-pool mining scan as a PySpark job, model loaded once per executor process, round-robin shard partitioning, refuses to mine from non-reserve roots. Run in local mode, records at `reports/experiments/spark/`. Cleaning stays on Polars, deliberately. **No Beam.** | 7 | Spark job **implemented and run locally**; **never on a cluster**; Beam **absent** |
 | 8 | Orchestration (Airflow) | **Not in this repo.** See the note below. | 8 | **absent** |
 | 9 | MLOps and experiment tracking | `registry/model_registry.py`, W&B config in every training YAML, `MANIFEST.json` dataset versioning | 3 | registry contract implemented |
 | 10 | DevOps tools | `.github/workflows/ci.yml` (lint, tests, spec check, README claim check), `Makefile`, `infra/docker/`, `pyproject.toml`, ruff/mypy/pytest | 0 | **implemented**, and the workflow now actually triggers: it was pinned to a `main` branch this repo does not have |
@@ -62,12 +62,28 @@ optimizations do not apply. Being able to explain *why not* is worth more than a
 misapplied dependency.
 
 **Spark / Beam (#7).** Phase 1 runs on Polars and PyArrow because 400k documents fit
-on one machine and Spark would add operational cost for no throughput. Spark earns its
-place in Phase 7, at the 5-million-document reserve pool, where the mining scan is
-genuinely embarrassingly parallel over shards. That job is not written yet. It belongs with the
-Phase 4 mining code in `hard_negative/`, not in a standalone folder that exists only to
-name the framework. Forcing Spark into v1 would be a worse engineering answer, and an
-interviewer who probes will find that out.
+on one machine and Spark would add operational cost for no throughput. That is still the
+right call and the cleaning path has not changed.
+
+The mining scan is the job with a different shape, and it is now written:
+`hard_negative/spark_scan.py`, living with the Phase 4 mining code rather than in a folder
+that exists to name a framework. It reads sharded parquet, loads the detector once per
+executor process, scores each document independently, and returns only the confident false
+positives so the pool does not cross the network to be discarded.
+
+**What the local run proved, and what it could not.** On a 10-core machine, scanning a
+fixed 40 documents at 1, 2 and 4 partitions, throughput tops out near 5.5 docs/s however
+the cores are divided, with skew at 1.03. The partitions are balanced; the host is full.
+That is the expected result and it is not evidence for Spark: a single machine
+redistributes cores rather than adding them. The job has never run on a cluster, and
+`data/reserve/` is empty because the corpus is not redistributed, so the 5-million-document
+pool it is built for does not exist here.
+
+**The number I nearly reported.** The first sweep left torch at its default 4 threads in
+every arm and showed 1.72x at four partitions. The serial baseline was using 4 of 10 cores
+while the parallel arms used more, so the speedup was an artifact of a handicapped
+denominator. Correcting it lowered the headline to 1.31x. Being able to explain why the
+worse number is the true one is the part of this row worth interviewing about.
 
 **Airflow (#8).** The recurring pipeline is the flywheel itself: scan reserve pool,
 cluster failures, generate targeted mirrors, retrain, evaluate, gate. That is a real DAG

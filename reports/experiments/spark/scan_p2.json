@@ -1,0 +1,27 @@
+{
+ "mode": "spark local",
+ "root": "data/silver",
+ "is_reserve_pool": false,
+ "mining_candidates_written": false,
+ "why": "Timing only. The root is not the reserve pool, so any hit here is a document the model was trained on and is not a mining candidate.",
+ "arm": "baseline",
+ "threshold": 0.99,
+ "partitions": 2,
+ "files": 6,
+ "total_docs_budget": 40,
+ "docs_per_partition_cap": 20,
+ "torch_threads_per_partition": 5,
+ "host_cpu_count": 10,
+ "documents_scanned": 40,
+ "scoring_errors": 0,
+ "above_threshold": 0,
+ "wall_seconds": 16.53,
+ "documents_per_second_wall": 2.421,
+ "documents_per_second_compute": 5.671,
+ "startup_seconds": 9.47,
+ "per_partition_seconds": [
+  7.05,
+  6.63
+ ],
+ "skew": 1.031
+}

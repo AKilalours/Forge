@@ -295,6 +295,29 @@ def main(check_test_count: bool = True) -> int:
             "cpu_latency.json is not committed"
         )
 
+    # ---- spark local sweep ----------------------------------------------------
+    spark_path = REPORTS / "spark" / "spark_summary.json"
+    if "| Partitions | Threads each |" in md:
+        if not spark_path.exists():
+            bad.append("README publishes a Spark sweep but spark_summary.json is missing")
+        else:
+            sp = {r["partitions"]: r for r in json.loads(spark_path.read_text())["rows"]}
+            for row_key, cells in table_rows(md, "| Partitions | Threads each |").items():
+                n = int(row_key)
+                if n not in sp:
+                    bad.append(f"spark table has {n} partitions, the artifact does not")
+                    continue
+                r_ = sp[n]
+                for label, published, stored, pct in [
+                    ("docs/s", cells[1], r_["documents_per_second_compute"], False),
+                    ("speedup", cells[2], r_["speedup"], False),
+                    ("efficiency", cells[3], r_["efficiency"], True),
+                    ("skew", cells[4], r_["skew"], False),
+                ]:
+                    if not close(published, float(stored), percent=pct):
+                        bad.append(f"spark p={n} {label}: README {published!r} vs "
+                                   f"artifact {stored!r}")
+
     # ---- badges --------------------------------------------------------------
     auroc_badge = re.search(r"In--distribution%20AUROC-([\d.]+)-", md)
     if not auroc_badge or not close(auroc_badge.group(1), summary("A")["val"]["auroc"]):

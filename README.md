@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Tests-938%20passing-00C853?style=for-the-badge"/>
+  <img src="https://img.shields.io/badge/Tests-951%20passing-00C853?style=for-the-badge"/>
   <img src="https://img.shields.io/badge/In--distribution%20AUROC-0.99997-00C853?style=for-the-badge"/>
   <img src="https://img.shields.io/badge/FPR%20budget-0.1%25-0056D2?style=for-the-badge"/>
   <img src="https://img.shields.io/badge/Headline-Partial%20null%20result-FF8F00?style=for-the-badge"/>
@@ -226,9 +226,50 @@ modules were citing a budget that had no artifact behind it. There is one now.
 **Scope.** This times the model forward over pre-tokenised windows. Tokenisation,
 windowing and HTTP are not included, so a real request costs this plus those.
 
+
+### Spark, and why one machine cannot demonstrate its value
+
+The mining scan is the one job in FORGE shaped for Spark: it reads a reserve pool sized in
+millions, runs one independent forward per document, keeps the small fraction the detector
+is confidently wrong about, and needs no shuffle, no join and no cross-document state.
+`forge/hard_negative/spark_scan.py` is that job.
+
+Run in Spark **local mode** on a 10-core machine, scanning the same 40 documents at every
+partition count, with the host's cores divided among the partitions so they do not
+oversubscribe:
+
+| Partitions | Threads each | Docs/s (compute) | Speedup | Efficiency | Skew |
+|---|---|---|---|---|---|
+| 1 | 10 | 4.33 | 1.00 | 100.0% | 1.00 |
+| 2 | 5 | 5.67 | 1.31 | 65.5% | 1.03 |
+| 4 | 2 | 5.45 | 1.26 | 31.5% | 1.03 |
+
+Total threads is 10 in every row. **The ceiling is about 5.5 docs/s however the cores are
+sliced.** On one host, Spark partitioning redistributes cores; it does not add any. Two
+partitions of five threads beats one partition of ten, because torch's intra-op scaling is
+sublinear, and past that the gains are gone. Skew stays at 1.03, so the partitions are
+balanced and the machine is simply full.
+
+> **The measurement I nearly published instead.** The first sweep left torch at its default
+> 4 threads regardless of partition count, and reported a 1.72x speedup at four partitions.
+> That number was real and meaningless: the serial baseline was using 4 of 10 cores while
+> the parallel arms used more. Handicap the baseline and any parallel speedup looks good.
+> Fixing it made the headline *worse*, from 1.72x to 1.31x, because the baseline improved
+> by 51% and the parallel arms by less. A speedup is a ratio, and a ratio is only as honest
+> as its denominator.
+
+**So the Spark claim this repo makes is narrow.** The job exists, is tested, parallelises
+without skew, and refuses to mine from anything that is not the reserve pool. It has never
+run on a cluster, and `data/reserve/` is empty because the corpus is not redistributed. A
+single host cannot show what Spark is for, and a 1.31x local number is not evidence that it
+would help at 5M documents. The architecture argument is in
+[`docs/jd_coverage.md`](docs/jd_coverage.md); this table is only evidence that the job runs
+and scales the way its shape predicts.
+
 Records: [`reports/experiments/profile/`](reports/experiments/profile),
-[`reports/experiments/scaling/`](reports/experiments/scaling) and
-[`reports/experiments/inference/`](reports/experiments/inference).
+[`reports/experiments/scaling/`](reports/experiments/scaling),
+[`reports/experiments/inference/`](reports/experiments/inference) and
+[`reports/experiments/spark/`](reports/experiments/spark).
 
 ---
 

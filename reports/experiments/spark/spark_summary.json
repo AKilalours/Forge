@@ -1,0 +1,40 @@
+{
+ "mode": "spark local",
+ "root": "data/silver",
+ "is_reserve_pool": false,
+ "documents_scanned": 40,
+ "invariant": "Every partition count scans the SAME total number of documents; the per-partition cap absorbs the difference. Speedup is computed on compute time, which excludes JVM startup and the one model load per process.",
+ "caveat": "Spark local mode on one machine. Partitions here are threads sharing RAM and one disk, not executors on separate hosts, so this measures whether the job PARALLELISES, not what a cluster would do. No cluster run exists.",
+ "rows": [
+  {
+   "partitions": 1,
+   "documents_per_second_compute": 4.328,
+   "documents_per_second_wall": 2.208,
+   "wall_seconds": 18.12,
+   "startup_seconds": 8.87,
+   "speedup": 1.0,
+   "efficiency": 1.0,
+   "skew": 1.0
+  },
+  {
+   "partitions": 2,
+   "documents_per_second_compute": 5.671,
+   "documents_per_second_wall": 2.421,
+   "wall_seconds": 16.53,
+   "startup_seconds": 9.47,
+   "speedup": 1.31,
+   "efficiency": 0.655,
+   "skew": 1.031
+  },
+  {
+   "partitions": 4,
+   "documents_per_second_compute": 5.453,
+   "documents_per_second_wall": 2.056,
+   "wall_seconds": 19.45,
+   "startup_seconds": 12.12,
+   "speedup": 1.26,
+   "efficiency": 0.315,
+   "skew": 1.026
+  }
+ ]
+}
