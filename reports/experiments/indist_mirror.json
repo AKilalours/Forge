@@ -1,0 +1,153 @@
+{
+ "experiment": "forge_min_mirror",
+ "smoke": false,
+ "code_commit": "d090c9b1d3b03d70f74ffc5a5323bf2809a4126d",
+ "dataset_version": "v0.1-min",
+ "backbone": "microsoft/deberta-v3-base",
+ "device": "cuda",
+ "precision": "bf16",
+ "arm": "mirror",
+ "ai_source": "data/silver/mirrors",
+ "n_windows": {
+  "train": 33196,
+  "val": 4084,
+  "test": 4211
+ },
+ "steps": 1038,
+ "wall_seconds": 1283.4,
+ "fpr_budget": 0.001,
+ "val": {
+  "loss": 0.014078,
+  "fpr_at_budget": 0.000502,
+  "threshold": 0.992285,
+  "fnr": 0.004304,
+  "auroc": 0.999971,
+  "ece": 0.003713,
+  "temperature": 1.405891,
+  "n_human": 1993,
+  "n_ai": 2091
+ },
+ "history": [
+  {
+   "step": 50,
+   "loss": 0.1672375649213791,
+   "lr": 1.6129032258064517e-05,
+   "examples_per_second": 55.745139540250314
+  },
+  {
+   "step": 100,
+   "loss": 0.005463120993226767,
+   "lr": 1.9221311475409837e-05,
+   "examples_per_second": 55.661108863534274
+  },
+  {
+   "step": 150,
+   "loss": 0.01351423840969801,
+   "lr": 1.8196721311475413e-05,
+   "examples_per_second": 55.81243211242003
+  },
+  {
+   "step": 200,
+   "loss": 0.000994894653558731,
+   "lr": 1.7172131147540985e-05,
+   "examples_per_second": 55.79242232944857
+  },
+  {
+   "step": 250,
+   "loss": 0.03255400434136391,
+   "lr": 1.6147540983606558e-05,
+   "examples_per_second": 55.821824546649886
+  },
+  {
+   "step": 300,
+   "loss": 0.00499299168586731,
+   "lr": 1.5122950819672134e-05,
+   "examples_per_second": 55.73233414258585
+  },
+  {
+   "step": 350,
+   "loss": 0.0039183651097118855,
+   "lr": 1.4098360655737706e-05,
+   "examples_per_second": 55.78502771356115
+  },
+  {
+   "step": 400,
+   "loss": 0.0005078712711110711,
+   "lr": 1.3073770491803278e-05,
+   "examples_per_second": 55.82167379602426
+  },
+  {
+   "step": 450,
+   "loss": 0.000580005522351712,
+   "lr": 1.2049180327868853e-05,
+   "examples_per_second": 55.874673960880884
+  },
+  {
+   "step": 500,
+   "loss": 0.0013767259661108255,
+   "lr": 1.1024590163934428e-05,
+   "examples_per_second": 55.894043495332106
+  },
+  {
+   "step": 550,
+   "loss": 0.000886819208972156,
+   "lr": 1e-05,
+   "examples_per_second": 53.136784076143606
+  },
+  {
+   "step": 600,
+   "loss": 0.00027519470313563943,
+   "lr": 8.975409836065575e-06,
+   "examples_per_second": 53.34801035703717
+  },
+  {
+   "step": 650,
+   "loss": 0.00030901437276043,
+   "lr": 7.950819672131147e-06,
+   "examples_per_second": 53.59688380207682
+  },
+  {
+   "step": 700,
+   "loss": 0.00021795503562316298,
+   "lr": 6.926229508196722e-06,
+   "examples_per_second": 53.73309598761022
+  },
+  {
+   "step": 750,
+   "loss": 0.0004663436848204583,
+   "lr": 5.9016393442622956e-06,
+   "examples_per_second": 53.85159723154804
+  },
+  {
+   "step": 800,
+   "loss": 0.0010688125621527433,
+   "lr": 4.877049180327869e-06,
+   "examples_per_second": 53.96208233582743
+  },
+  {
+   "step": 850,
+   "loss": 0.00027929648058488965,
+   "lr": 3.852459016393443e-06,
+   "examples_per_second": 54.0878876783132
+  },
+  {
+   "step": 900,
+   "loss": 0.00031293107895180583,
+   "lr": 2.8278688524590166e-06,
+   "examples_per_second": 54.16236933696266
+  },
+  {
+   "step": 950,
+   "loss": 0.0002911854244302958,
+   "lr": 1.8032786885245903e-06,
+   "examples_per_second": 54.26390516792284
+  },
+  {
+   "step": 1000,
+   "loss": 0.0006402814760804176,
+   "lr": 7.78688524590164e-07,
+   "examples_per_second": 54.33721839105533
+  }
+ ],
+ "_note": "Copied from outputs/, which is gitignored because it also holds model weights. The README's in-distribution table is computed from these values, so the result belongs in the committed artifact directory beside the out-of-distribution ones. Until this file existed, that table had nothing behind it on a clean checkout."
+}

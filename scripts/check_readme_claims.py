@@ -24,8 +24,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REPORTS = ROOT / "reports" / "experiments"
-OUTPUTS = ROOT / "outputs"
-EXPERIMENT = {"A": "forge_min_baseline", "B": "forge_min_mirror"}
 BENCHMARKS = ("hc3", "raid", "mage")
 ARMS = {"A": "baseline", "B": "mirror"}
 
@@ -35,8 +33,15 @@ def load(name: str) -> dict:
 
 
 def summary(arm_key: str) -> dict:
-    """The training run's own record, which is where the in-distribution table came from."""
-    return json.loads((OUTPUTS / EXPERIMENT[arm_key] / "summary.json").read_text())
+    """The training run's own record, which is where the in-distribution table came from.
+
+    Read from reports/experiments/, not outputs/. outputs/ is gitignored because it also
+    holds model weights, so on a clean checkout it does not exist, and a check that reads
+    from there passes on the author's laptop and crashes in CI. That is the same shape as
+    publishing a number whose artifact was never committed, which is what this script
+    exists to prevent.
+    """
+    return json.loads((REPORTS / f"indist_{ 'baseline' if arm_key == 'A' else 'mirror' }.json").read_text())
 
 
 def collected_test_count() -> int | None:
