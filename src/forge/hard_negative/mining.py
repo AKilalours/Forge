@@ -31,10 +31,11 @@ distributions, and it stays untested against real ones until Phase 3 trains a mo
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from collections.abc import Iterable, Iterator
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, Iterator, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from forge.common.schemas import FailureRecord, Label
 
@@ -142,7 +143,7 @@ def scan(
 
     for batch in _batched(reserve, batch_size):
         scores = scorer.score([d.text for d in batch])
-        for doc, s in zip(batch, scores):
+        for doc, s in zip(batch, scores, strict=True):
             stats.scanned += 1
             if s < operating_threshold:
                 continue
@@ -200,7 +201,7 @@ def scan_false_negatives(
     out: list[FailureRecord] = []
     now = datetime.now(timezone.utc)
     for batch in _batched(ai_pool, 64):
-        for doc, s in zip(batch, scorer.score([d.text for d in batch])):
+        for doc, s in zip(batch, scorer.score([d.text for d in batch]), strict=True):
             stats.scanned += 1
             if s >= operating_threshold:
                 continue

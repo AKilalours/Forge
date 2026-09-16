@@ -34,8 +34,8 @@ it tells you nothing about robustness. Each function documents what it preserves
 from __future__ import annotations
 
 import io
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 ATTACK_VERSION = "image_attacks_v1"
 

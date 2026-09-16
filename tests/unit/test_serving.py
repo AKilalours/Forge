@@ -4,8 +4,8 @@ import pytest
 
 from forge.inference.batching import (
     BatchPolicy,
-    QueueOverflow,
     QueuedRequest,
+    QueueOverflow,
     fits_latency_budget,
     plan_batches,
     should_flush,

@@ -139,9 +139,10 @@ def load_arm(arm: str) -> Arm:
             "change the false-positive rate this project is built around."
         )
 
+    from transformers import AutoTokenizer
+
     from forge.modeling.encoder import ForgeConfig, build_model
     from forge.training.train import load_checkpoint
-    from transformers import AutoTokenizer
 
     summary = json.loads(summary_path.read_text())
     model = build_model(ForgeConfig(

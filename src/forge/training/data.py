@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pyarrow.parquet as pq
 
-from forge.common.schemas import Label, Split, TokenLabel
+from forge.common.schemas import TokenLabel
 from forge.modeling.alignment import IGNORE_INDEX, align_spans_to_tokens
 from forge.modeling.windowing import windows
 
@@ -129,7 +129,7 @@ def load_examples(
                 if r["split"] not in splits:
                     continue
                 spans = [(s["start_char"], s["end_char"], s["label"]) for s in r["spans"]]
-                ai = sum(e - s for s, e, l in spans if l != TokenLabel.HUMAN.value)
+                ai = sum(e - s for s, e, lbl in spans if lbl != TokenLabel.HUMAN.value)
                 mixed_rows.append(RawExample(r["doc_id"], r["source_group_id"], r["split"], r["text"],
                                              int(ai / max(len(r["text"]), 1) >= 0.5), spans,
                                              r.get("domain", "unknown")))
@@ -272,7 +272,7 @@ def cap_documents(rows: list[RawExample], cap: int) -> list[RawExample]:
 
     keep: set[str] = set()
     remaining = cap
-    for i, (split, split_rows) in enumerate(sorted(by_split.items())):
+    for i, (_split, split_rows) in enumerate(sorted(by_split.items())):
         share = round(cap * len(split_rows) / len(rows))
         # Last split takes the rounding remainder so the total is exact.
         if i == len(by_split) - 1:
@@ -339,7 +339,6 @@ def build_dataset(examples: list[RawExample], tokenizer, max_length: int = 512,
     window boundaries at token positions that differ from the offsets used for span
     alignment.
     """
-    import torch
 
     feats = []
     for ex in examples:
@@ -349,7 +348,7 @@ def build_dataset(examples: list[RawExample], tokenizer, max_length: int = 512,
         ids = enc["input_ids"]
         if not ids:
             continue
-        spans = [(s, e, TokenLabel(l)) for s, e, l in (ex.spans or _single_span(ex.text, ex.label))]
+        spans = [(s, e, TokenLabel(lbl)) for s, e, lbl in (ex.spans or _single_span(ex.text, ex.label))]
         token_labels = align_spans_to_tokens(offsets, spans)
 
         # reserve two positions for the special tokens the collator adds

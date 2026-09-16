@@ -25,11 +25,11 @@ from __future__ import annotations
 
 import time
 from collections import Counter
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
-from typing import Callable, Iterable, Sequence
 
 from forge.image.manifest import ImageRecord
-from forge.image.normalize import ImageTooSmallError, NormalizationPolicy, POLICY_V1, describe
+from forge.image.normalize import POLICY_V1, ImageTooSmallError, NormalizationPolicy, describe
 from forge.image.phash import DuplicateIndex, dhash, to_hex
 
 # Deliberately conservative. This fetches from a third party's infrastructure using their

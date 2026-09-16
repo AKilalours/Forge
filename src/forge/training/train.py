@@ -33,7 +33,7 @@ import json
 import math
 import os
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import numpy as np
@@ -167,7 +167,7 @@ class ValResult:
         return {k: (round(v, 6) if isinstance(v, float) else v) for k, v in asdict(self).items()}
 
 
-def is_better_checkpoint(val: "ValResult", state: TrainState, fpr_budget: float) -> bool:
+def is_better_checkpoint(val: ValResult, state: TrainState, fpr_budget: float) -> bool:
     """Should this evaluation replace the saved best checkpoint?
 
     The rule: **meeting the false-positive budget is a constraint, missing less AI text is
@@ -453,7 +453,8 @@ def run(config: dict | str, smoke: bool = False, resume: str | None = None) -> d
                     scaler.unscale_(optim)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
                 if scaler.is_enabled():
-                    scaler.step(optim); scaler.update()
+                    scaler.step(optim)
+                    scaler.update()
                 else:
                     optim.step()
                 sched.step()

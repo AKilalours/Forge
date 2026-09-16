@@ -34,7 +34,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
-from forge.common.schemas import GeneratorSpec, Label, MirrorSpec, Split, SyntheticDocument
+from forge.common.schemas import GeneratorSpec, Label, MirrorSpec, SyntheticDocument
 from forge.common.splits import assign_split
 from forge.generation.assignment import (
     assert_no_held_out,
@@ -191,7 +191,7 @@ def generate_random(
                         flush=True,
                     )
                 still = []
-                for item, d, raw in zip(pending, decs, texts):
+                for item, d, raw in zip(pending, decs, texts, strict=True):
                     i, spec = item[0], item[1]
                     text = strip_wrapper(raw)
                     reason = None

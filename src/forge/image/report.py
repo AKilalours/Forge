@@ -32,7 +32,6 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 
 from forge.image.attribution import occlusion_attribution
-from forge.image.detector import ABSTAIN_HIGH, ABSTAIN_LOW
 from forge.image.evidence import Evidence, build_evidence
 from forge.image.forensics import (
     HIGH,

@@ -10,8 +10,8 @@ import pytest
 
 from forge.adversarial.attacks import (
     ATTACKS,
-    RUNNABLE_OFFLINE,
     HOMOGLYPHS,
+    RUNNABLE_OFFLINE,
     ModelAttack,
     apply_attack,
     fold_homoglyphs,
@@ -62,8 +62,8 @@ def test_severity_actually_scales_the_perturbation_rate():
     """
     low = apply_attack(TEXT, "case_perturb", "doc1", 0.02)
     high = apply_attack(TEXT, "case_perturb", "doc1", 0.30)
-    n_low = sum(1 for a, b in zip(TEXT, low) if a != b)
-    n_high = sum(1 for a, b in zip(TEXT, high) if a != b)
+    n_low = sum(1 for a, b in zip(TEXT, low, strict=False) if a != b)
+    n_high = sum(1 for a, b in zip(TEXT, high, strict=False) if a != b)
     assert n_low > 0, "a 2 percent attack must still perturb something on a long document"
     assert n_high > n_low * 3
 

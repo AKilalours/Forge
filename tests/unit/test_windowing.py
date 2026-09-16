@@ -17,7 +17,7 @@ def test_windows_cover_the_whole_document():
     n = 2000
     w = windows(n, 512, 384)
     assert w[0][0] == 0 and w[-1][1] == n
-    for a, b in zip(w, w[1:]):
+    for a, b in zip(w, w[1:], strict=False):
         assert b[0] < a[1], "a gap between windows would create a blind spot"
 
 

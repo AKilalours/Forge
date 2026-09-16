@@ -40,7 +40,14 @@ from forge.generation.generators.base import (
     TransformersGenerator,
     VLLMGenerator,
 )
-from forge.generation.mirror import ValidationPolicy, ValidationStats, load_template, render_prompt, strip_wrapper, validate
+from forge.generation.mirror import (
+    ValidationPolicy,
+    ValidationStats,
+    load_template,
+    render_prompt,
+    strip_wrapper,
+    validate,
+)
 
 PARTITION_GLOB = "split=*/*.parquet"
 
@@ -75,7 +82,7 @@ def batch_generate(gen, prompts: list[str], decodings: list[Decoding]) -> list[s
     many = getattr(gen, "generate_many", None)
     if many is not None:
         return many(prompts, decodings)
-    return [gen.generate([p], d)[0] for p, d in zip(prompts, decodings)]
+    return [gen.generate([p], d)[0] for p, d in zip(prompts, decodings, strict=True)]
 
 
 def release(gen) -> None:
@@ -227,7 +234,7 @@ def generate_mirrors(
                         flush=True,
                     )
                 still: list[_Work] = []
-                for w, d, raw in zip(pending, decs, texts):
+                for w, d, raw in zip(pending, decs, texts, strict=True):
                     text = strip_wrapper(raw)
                     ok, reason = validate(text, w.human.text, w.attrs, policy, _hasher=hasher)
                     if ok:

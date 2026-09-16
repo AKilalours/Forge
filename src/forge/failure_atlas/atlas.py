@@ -108,7 +108,7 @@ class Atlas:
         return w
 
     def cluster_of(self, sample_id: str) -> int:
-        for r, c in zip(self.records, self.labels.tolist()):
+        for r, c in zip(self.records, self.labels.tolist(), strict=True):
             if r.sample_id == sample_id:
                 return int(c)
         raise KeyError(sample_id)

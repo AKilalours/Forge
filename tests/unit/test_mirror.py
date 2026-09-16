@@ -27,13 +27,11 @@ from forge.generation.attributes import (
 )
 from forge.generation.generators.base import (
     Decoding,
-    FakeGenerator,
     UnpinnedRevisionError,
     VLLMGenerator,
     require_pinned_revision,
 )
 from forge.generation.mirror import (
-    ValidationPolicy,
     load_template,
     render_prompt,
     strip_wrapper,

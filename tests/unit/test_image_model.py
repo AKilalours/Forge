@@ -58,7 +58,7 @@ def _batch(n: int = 2):
 
 def test_grid_must_tile_the_image() -> None:
     with pytest.raises(ValueError, match="not divisible"):
-        ForgeImageConfig(image_size=100, patch_size=16).grid
+        _ = ForgeImageConfig(image_size=100, patch_size=16).grid
 
 
 def test_outputs_have_the_expected_shapes() -> None:

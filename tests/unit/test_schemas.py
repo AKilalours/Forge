@@ -10,7 +10,7 @@ def test_token_label_set_is_exactly_three_and_ordered():
 
 
 def test_human_document_requires_a_real_hash():
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         HumanDocument(
             doc_id="x", source_group_id="grp_x", text="t", source="fw", license="ODC-By-1.0",
             domain="web", text_register="informational", language_score=0.9,
@@ -20,5 +20,5 @@ def test_human_document_requires_a_real_hash():
 
 
 def test_span_must_be_ordered():
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         TokenLabelSpan(start_char=10, end_char=5, label=TokenLabel.HUMAN)

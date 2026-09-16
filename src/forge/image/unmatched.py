@@ -33,15 +33,14 @@ identified by its geometry.
 from __future__ import annotations
 
 import hashlib
-from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable, Sequence
 
 from forge.common.splits import assign_split
 from forge.image.caption import Caption, to_prompt
 from forge.image.generators import GenerationSpec
 from forge.image.mirror import ImageMirror, MirrorStats
-from forge.image.normalize import NormalizationPolicy, POLICY_V1, normalize_bytes
+from forge.image.normalize import POLICY_V1, NormalizationPolicy, normalize_bytes
 from forge.image.phash import dhash, to_hex
 
 UNMATCHED_VERSION = "image_random_v1"
@@ -154,7 +153,7 @@ def generate_unmatched(
             stats.rejected["generation_failed"] += len(chunk)
             continue
 
-        for (index, caption), prompt, candidate in zip(chunk, prompts, candidates):
+        for (index, caption), prompt, candidate in zip(chunk, prompts, candidates, strict=True):
             try:
                 normalised = normalize_bytes(candidate, norm_policy)
             except Exception:

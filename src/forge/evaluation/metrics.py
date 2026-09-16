@@ -94,7 +94,7 @@ def expected_calibration_error(y_true, y_score, n_bins: int = 15) -> float:
     edges = np.linspace(0.0, 1.0, n_bins + 1)
     n = y_score.size
     ece = 0.0
-    for lo, hi in zip(edges[:-1], edges[1:]):
+    for lo, hi in zip(edges[:-1], edges[1:], strict=True):
         mask = (y_score > lo) & (y_score <= hi) if lo > 0 else (y_score >= lo) & (y_score <= hi)
         if not mask.any():
             continue

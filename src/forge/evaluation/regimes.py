@@ -12,8 +12,8 @@ is measuring memorisation instead.
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import Callable, Iterable, Sequence
 
 
 @dataclass

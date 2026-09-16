@@ -34,11 +34,11 @@ from __future__ import annotations
 
 import hashlib
 import io
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
-from typing import Sequence
 
 from forge.common.splits import assign_split
-from forge.image.normalize import NormalizationPolicy, POLICY_V1, normalize_bytes
+from forge.image.normalize import POLICY_V1, NormalizationPolicy, normalize_bytes
 
 COMPOSITE_VERSION = "image_composite_v1"
 

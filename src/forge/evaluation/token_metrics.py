@@ -93,13 +93,13 @@ def extract_segments(labels, ignore_index: int = IGNORE_INDEX, positive_only: bo
     """
     labs = list(labels)
     segs, start, cur = [], None, None
-    for i, l in enumerate(labs + [None]):
-        if l == ignore_index or l is None or l != cur:
+    for i, lab in enumerate(labs + [None]):
+        if lab == ignore_index or lab is None or lab != cur:
             if cur is not None and start is not None and (not positive_only or cur != HUMAN_ID):
                 segs.append((start, i, int(cur)))
-            start, cur = (None, None) if (l == ignore_index or l is None) else (i, l)
+            start, cur = (None, None) if (lab == ignore_index or lab is None) else (i, lab)
         elif start is None:
-            start, cur = i, l
+            start, cur = i, lab
     return segs
 
 
@@ -127,7 +127,9 @@ def segment_f1(y_true, y_pred, iou_threshold: float = 0.5,
     for _, ti, pi in pairs:
         if ti in used_t or pi in used_p:
             continue
-        used_t.add(ti); used_p.add(pi); tp += 1
+        used_t.add(ti)
+        used_p.add(pi)
+        tp += 1
     fp, fn = len(pred_segs) - tp, len(true_segs) - tp
     prec = tp / (tp + fp) if (tp + fp) else 0.0
     rec = tp / (tp + fn) if (tp + fn) else 0.0
@@ -137,12 +139,12 @@ def segment_f1(y_true, y_pred, iou_threshold: float = 0.5,
 def extract_boundaries(labels, ignore_index: int = IGNORE_INDEX) -> list[int]:
     """Positions where the label changes, skipping ignored positions."""
     out, prev = [], None
-    for i, l in enumerate(labels):
-        if l == ignore_index:
+    for i, lab in enumerate(labels):
+        if lab == ignore_index:
             continue
-        if prev is not None and l != prev:
+        if prev is not None and lab != prev:
             out.append(i)
-        prev = l
+        prev = lab
     return out
 
 
@@ -159,7 +161,8 @@ def boundary_f1(y_true, y_pred, tolerance: int = 2,
     for pb in p:
         for i, tb in enumerate(t):
             if i not in used and abs(pb - tb) <= tolerance:
-                used.add(i); tp += 1
+                used.add(i)
+                tp += 1
                 break
     fp, fn = len(p) - tp, len(t) - tp
     prec = tp / (tp + fp) if (tp + fp) else 0.0

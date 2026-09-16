@@ -1,6 +1,5 @@
 """Token, segment and boundary F1. Plan section 22, gap G1."""
 
-import pytest
 
 from forge.evaluation.token_metrics import (
     boundary_f1,

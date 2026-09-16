@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from forge.evaluation.release_gate import GateResult, evaluate
+from forge.evaluation.release_gate import evaluate
 from forge.monitoring import drift
 from forge.monitoring.feedback import (
     FeedbackItem,

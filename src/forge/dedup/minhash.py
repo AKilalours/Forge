@@ -93,7 +93,7 @@ class MinHash:
 def estimated_jaccard(sig_a: tuple[int, ...], sig_b: tuple[int, ...]) -> float:
     if len(sig_a) != len(sig_b):
         raise ValueError("signatures must have the same length")
-    return sum(1 for a, b in zip(sig_a, sig_b) if a == b) / len(sig_a)
+    return sum(1 for a, b in zip(sig_a, sig_b, strict=True) if a == b) / len(sig_a)
 
 
 class MinHashLSH:

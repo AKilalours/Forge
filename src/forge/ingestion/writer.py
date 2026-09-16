@@ -22,12 +22,12 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-# Read the data lake with this, never with a bare **/*.parquet.
-PARTITION_GLOB = "source=*/split=*/*.parquet"
-
 from forge.common.hashing import content_sha256
 from forge.common.schemas import HumanDocument
 from forge.common.splits import SPLIT_SALT
+
+# Read the data lake with this, never with a bare **/*.parquet.
+PARTITION_GLOB = "source=*/split=*/*.parquet"
 
 
 def _code_commit() -> str:

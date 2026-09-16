@@ -45,7 +45,7 @@ from forge.common.schemas import FailureRecord
 from forge.failure_atlas.clustering import NOISE
 
 
-@dataclass
+@dataclass(frozen=True)
 class SelectionPolicy:
     max_selected: int = 100_000
     min_per_cluster: int = 10
@@ -138,7 +138,7 @@ def select_proportional(
 ) -> Selection:
     by_cluster: dict[int, list[FailureRecord]] = {}
     dropped_noise = 0
-    for r, c in zip(records, labels.tolist()):
+    for r, c in zip(records, labels.tolist(), strict=True):
         c = int(c)
         if c == NOISE and not policy.include_noise:
             dropped_noise += 1

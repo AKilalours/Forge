@@ -41,8 +41,8 @@ from __future__ import annotations
 
 import hashlib
 import re
-from dataclasses import dataclass, field
-from typing import Callable, Protocol
+from dataclasses import dataclass
+from typing import Protocol
 
 from forge.cleaning.normalize import normalize
 from forge.dedup.minhash import MinHash, estimated_jaccard

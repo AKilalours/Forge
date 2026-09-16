@@ -31,8 +31,8 @@ Three per-dataset traps, each of which produces a believable but wrong result:
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
-from typing import Iterable, Iterator
 
 import numpy as np
 
@@ -340,7 +340,7 @@ def group_aware_scores(docs: list[BenchmarkDoc], scores: list[float]) -> tuple[l
     """
     agg: dict[str, list[float]] = {}
     lab: dict[str, int] = {}
-    for d, s in zip(docs, scores):
+    for d, s in zip(docs, scores, strict=True):
         agg.setdefault(d.group_id, []).append(float(s))
         lab[d.group_id] = d.label
     keys = sorted(agg)

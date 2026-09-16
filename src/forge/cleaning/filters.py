@@ -49,7 +49,7 @@ def symbol_ratio(text: str) -> float:
 
 
 def repeated_line_ratio(text: str) -> float:
-    lines = [ln for ln in (l.strip() for l in text.split("\n")) if ln]
+    lines = [ln for ln in (raw.strip() for raw in text.split("\n")) if ln]
     if len(lines) < 2:
         return 0.0
     return 1.0 - (len(set(lines)) / len(lines))

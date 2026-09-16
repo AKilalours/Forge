@@ -15,7 +15,10 @@ np = pytest.importorskip("numpy")
 Image = pytest.importorskip("PIL.Image")
 
 from forge.image.maps import (  # noqa: E402
-    _to_png_uri, build_maps, detail_grid, noise_grid,
+    _to_png_uri,
+    build_maps,
+    detail_grid,
+    noise_grid,
 )
 
 PATCH = (slice(80, 176), slice(80, 176))     # the planted region, in pixels

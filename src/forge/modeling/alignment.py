@@ -85,7 +85,7 @@ def spans_from_token_labels(
 ) -> list[tuple[int, int, TokenLabel]]:
     """Inverse direction: turn predicted token labels back into character spans for the API."""
     out: list[tuple[int, int, TokenLabel]] = []
-    for (start, end), lid in zip(offsets, label_ids):
+    for (start, end), lid in zip(offsets, label_ids, strict=True):
         if lid == ignore_index or end <= start:
             continue
         label = ID_TO_LABEL[lid]

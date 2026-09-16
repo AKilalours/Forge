@@ -12,8 +12,6 @@ from __future__ import annotations
 import pytest
 
 from forge.image.detector import (
-    ABSTAIN_HIGH,
-    ABSTAIN_LOW,
     Detection,
     LabelPolarityUnknown,
     resolve_ai_index,

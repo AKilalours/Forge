@@ -36,4 +36,4 @@ def aggregate(window_scores: list[float], weights: list[float] | None = None) ->
     total = sum(weights)
     if total <= 0:
         raise ValueError("weights must sum to a positive value")
-    return sum(s * w for s, w in zip(window_scores, weights)) / total
+    return sum(s * w for s, w in zip(window_scores, weights, strict=True)) / total

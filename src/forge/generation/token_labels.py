@@ -92,7 +92,7 @@ def validate_spans(text: str, spans: list[Span]) -> None:
     ordered = sorted(spans, key=lambda s: s.start_char)
     if ordered[0].start_char != 0:
         raise SpanError(f"first span starts at {ordered[0].start_char}, expected 0")
-    for a, b in zip(ordered, ordered[1:]):
+    for a, b in zip(ordered, ordered[1:], strict=False):
         if b.start_char != a.end_char:
             raise SpanError(f"gap or overlap between {a.end_char} and {b.start_char}")
     if ordered[-1].end_char != len(text):

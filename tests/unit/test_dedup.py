@@ -92,7 +92,7 @@ def test_band_parameters_are_consistent():
 
 def test_bands_must_divide_permutations():
     try:
-        LshParams(num_perm=128, bands=7).rows
+        _ = LshParams(num_perm=128, bands=7).rows
     except ValueError:
         pass
     else:

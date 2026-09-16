@@ -32,7 +32,6 @@ project exists to avoid. They are reported as what they are: facts about the fil
 from __future__ import annotations
 
 import io
-import math
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -253,7 +252,7 @@ def _quality_from_table(table: tuple[int, ...]) -> int | None:
     """
     if len(table) < 64:
         return None
-    ratios = [t / b for t, b in zip(table[:64], _IJG_LUMA_Q50) if b]
+    ratios = [t / b for t, b in zip(table[:64], _IJG_LUMA_Q50, strict=False) if b]
     if not ratios:
         return None
     scale = sum(ratios) / len(ratios) * 100
@@ -300,7 +299,7 @@ def jpeg_tables(data: bytes) -> Finding:
 
     luma = tables.get(0, ())
     quality = _quality_from_table(luma)
-    ratios = [t / b for t, b in zip(luma[:64], _IJG_LUMA_Q50) if b] if luma else []
+    ratios = [t / b for t, b in zip(luma[:64], _IJG_LUMA_Q50, strict=False) if b] if luma else []
     spread = (max(ratios) - min(ratios)) if ratios else None
     # A scaled IJG table has a near-constant ratio to the base table. A camera's tuned table
     # does not. 0.35 is a deliberately loose threshold: false "custom" is harmless here,

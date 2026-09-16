@@ -149,11 +149,11 @@ def test_no_verdict_is_shown_when_the_polarity_has_not_been_measured():
 
     Worse than no verdict, and not recoverable in front of a reader who knows the answer.
     """
-    from forge.image.report import build_report
-
     import io
 
     import pytest as _pytest
+
+    from forge.image.report import build_report
 
     _pytest.importorskip("PIL")
     from PIL import Image

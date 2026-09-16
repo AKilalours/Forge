@@ -36,13 +36,12 @@ costs the headline claim.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Iterable
 
 from forge.cleaning.normalize import normalize
 from forge.common.hashing import content_sha256
 from forge.dedup.minhash import LshParams, MinHashLSH
-
 
 # Looser than dedup's 0.8, on purpose. See the module docstring.
 CONTAMINATION_NEAR_THRESHOLD = 0.5

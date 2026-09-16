@@ -7,12 +7,12 @@ cannot load a model.
 
 from __future__ import annotations
 
-import json
 import sys
 
 import pytest
 
 from forge.inference.scorer import ARMS, ArmUnavailable, load_arm
+
 
 @pytest.fixture(autouse=True)
 def _clear_cache():

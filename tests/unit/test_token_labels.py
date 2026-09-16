@@ -4,8 +4,8 @@ import pytest
 
 from forge.common.schemas import Split, TokenLabel
 from forge.generation.token_labels import (
-    SpanError,
     Span,
+    SpanError,
     build_edit_diff,
     build_splice,
     build_splice_control,

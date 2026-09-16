@@ -34,13 +34,14 @@ forge/image/normalize.py, which is the same function ingestion used.
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, field
-from typing import Callable, Sequence
 
 from forge.common.splits import assign_split
-from forge.image.caption import Caption, CaptionRejected, to_prompt, validate as validate_caption
+from forge.image.caption import Caption, CaptionRejected, to_prompt
+from forge.image.caption import validate as validate_caption
 from forge.image.generators import GenerationSpec
-from forge.image.normalize import NormalizationPolicy, POLICY_V1, normalize_bytes
+from forge.image.normalize import POLICY_V1, NormalizationPolicy, normalize_bytes
 from forge.image.phash import dhash, to_hex
 
 MIRROR_VERSION = "image_mirror_v1"
@@ -178,7 +179,7 @@ def generate_mirrors(
             stats.rejected["generation_failed"] += len(chunk)
             continue
 
-        for (image_id, raw, caption, prompt), candidate in zip(chunk, candidates):
+        for (image_id, raw, caption, prompt), candidate in zip(chunk, candidates, strict=True):
             try:
                 normalised = normalize_bytes(candidate, norm_policy)
             except Exception:

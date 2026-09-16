@@ -40,7 +40,7 @@ class ForgeConfig:
 def build_model(config: ForgeConfig):  # pragma: no cover - needs torch
     """Construct the model. Imports torch lazily and fails with a useful message."""
     try:
-        import torch
+        import torch  # noqa: F401  # the import IS the availability probe
         from torch import nn
         from transformers import AutoConfig, AutoModel
     except ImportError as e:

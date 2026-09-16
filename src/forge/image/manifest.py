@@ -44,7 +44,7 @@ class ImageRecord:
     split: str = ""
     notes: dict = field(default_factory=dict)
 
-    def with_split(self) -> "ImageRecord":
+    def with_split(self) -> ImageRecord:
         """Assign the split from the image id, using the text track's hashing unchanged.
 
         The grouping key is the image id, so a photograph, every mirror generated from it

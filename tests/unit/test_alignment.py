@@ -1,6 +1,7 @@
 """Char-span to token-label alignment: the highest-risk pure function in Phase 3."""
 
-from forge.common.schemas import Split, TokenLabel as T
+from forge.common.schemas import Split
+from forge.common.schemas import TokenLabel as T
 from forge.modeling.alignment import (
     IGNORE_INDEX,
     LABEL_TO_ID,

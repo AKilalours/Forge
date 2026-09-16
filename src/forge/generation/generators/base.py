@@ -284,7 +284,7 @@ class TransformersGenerator:
         """No continuous batching here, so run them one at a time and keep the contract."""
         if len(prompts) != len(decodings):
             raise ValueError(f"{len(prompts)} prompts but {len(decodings)} decodings")
-        return [self.generate([p], d)[0] for p, d in zip(prompts, decodings)]
+        return [self.generate([p], d)[0] for p, d in zip(prompts, decodings, strict=True)]
 
     def close(self) -> None:  # pragma: no cover
         self._pipe = None

@@ -12,8 +12,8 @@ columns describe the model, and the `preprocessed` one is the production number.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Callable
+from collections.abc import Callable
+from dataclasses import dataclass
 
 from forge.adversarial.attacks import (
     ATTACKS,
@@ -77,7 +77,7 @@ def run_attacks(
         spec = ATTACKS[name]
         for sev in spec.severities:
             keep_raw, keep_pre, n_noop, n_invalid = [], [], 0, 0
-            for text, did in zip(ai_texts, doc_ids):
+            for text, did in zip(ai_texts, doc_ids, strict=True):
                 attacked = apply_attack(text, name, did, sev)
                 if is_noop(text, attacked):
                     n_noop += 1

@@ -9,8 +9,8 @@ import numpy as np
 import pytest
 
 from forge.common.schemas import FailureRecord, Label
-from forge.failure_atlas.atlas import build_atlas, summarize
-from forge.failure_atlas.clustering import NOISE, cluster, kmeans, silhouette
+from forge.failure_atlas.atlas import build_atlas
+from forge.failure_atlas.clustering import NOISE, kmeans, silhouette
 from forge.failure_atlas.embedding import HashingEmbedder
 from forge.hard_negative.mining import MinedLedger, ReserveDoc, scan, scan_false_negatives
 from forge.hard_negative.selection import (
@@ -237,7 +237,7 @@ def test_held_out_modes_are_entirely_absent_from_training():
     recs, texts = _mixed_failures()
     atlas = build_atlas(recs, texts, k=3)
     sel = select_proportional(recs, atlas.labels, SelectionPolicy(max_selected=1000))
-    by_id = {r.sample_id: c for r, c in zip(recs, atlas.labels.tolist())}
+    by_id = {r.sample_id: c for r, c in zip(recs, atlas.labels.tolist(), strict=True)}
     for r in sel.train:
         assert by_id[r.sample_id] not in sel.holdout_clusters
 

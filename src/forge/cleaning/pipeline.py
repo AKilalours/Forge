@@ -19,8 +19,8 @@ of its input is a bug you want to see in the report, not discover later.
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
-from typing import Iterable, Iterator
 
 from forge.cleaning import langid, pii
 from forge.cleaning.filters import (

@@ -5,7 +5,6 @@ import json
 import numpy as np
 
 from forge.evaluation.lab import (
-    LabReport,
     adversarial_table,
     choose_threshold,
     min_humans_for_fpr,

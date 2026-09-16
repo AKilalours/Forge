@@ -102,7 +102,7 @@ def test_group_key_comes_from_the_ai_member_not_the_human():
     """
     from forge.evaluation.regimes import resolve_group_key
 
-    recs = [Rec("h1", "g1", family := "human"), Rec("a1", "g1", generator_family="gemma")]
+    recs = [Rec("h1", "g1", "human"), Rec("a1", "g1", generator_family="gemma")]
     keys = resolve_group_key(recs, lambda r: r.generator_family, lambda r: r.source_group_id,
                              neutral="human")
     assert keys["g1"] == "gemma"

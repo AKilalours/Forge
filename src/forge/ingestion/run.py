@@ -11,12 +11,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterator
 
 from forge.cleaning.filters import LengthPolicy, QualityPolicy
 from forge.cleaning.pipeline import Cleaner, CleaningPolicy
 from forge.common.config import REPO_ROOT, load
-from forge.common.schemas import HumanDocument, Split
+from forge.common.schemas import HumanDocument
 from forge.common.splits import check_no_group_leakage
 from forge.ingestion import sources as src
 from forge.ingestion.writer import write_manifest, write_metadata_only, write_parquet
