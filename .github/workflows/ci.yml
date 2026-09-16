@@ -13,11 +13,18 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The floor that requires-python promises, and the version actually developed
+        # on. Testing only 3.10 while the README badges 3.12 means neither claim was
+        # ever checked against the other.
+        python-version: ["3.10", "3.12"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: ${{ matrix.python-version }}
           cache: pip
       # serve is installed so tests/unit/test_forge_app.py actually RUNS here.
       # With only [dev], fastapi is absent, the module skips itself, and CI goes
