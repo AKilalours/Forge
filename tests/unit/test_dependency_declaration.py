@@ -285,3 +285,99 @@ def test_the_streamlit_app_declares_the_same_ceilings():
     lines = {ln.split("#")[0].strip() for ln in text.splitlines()}
     assert any(ln.startswith("transformers") and "<5" in ln for ln in lines)
     assert any(ln.startswith("huggingface_hub") and "<1.0" in ln for ln in lines)
+
+
+# ---------------------------------------------------------------------------
+# THE SECOND REGRESSION, same shape as the first, found by the README badge check.
+#
+# tests/unit/test_forge_app.py guards itself with four module-level importorskip calls:
+# PIL, numpy, fastapi and httpx. httpx was declared in no extra, in no requirements file,
+# nowhere. It was installed on the author's machine as somebody else's transitive
+# dependency, so the module ran there and skipped entirely in CI.
+#
+# That is worse than a missing dependency, because a module-level importorskip produces a
+# GREEN run. The tests do not fail, they cease to exist, and the job reports success. This
+# repo had already been bitten by exactly that once: an earlier fix added the `serve` extra
+# so this same module would run in CI, which satisfied the fastapi guard and stopped one
+# guard short.
+#
+# The rule below is the general form: if a test module refuses to run without a package,
+# that package must be declared, so installing the project can actually satisfy it. A test
+# guarded on a dependency nobody declares is a test nobody runs.
+# ---------------------------------------------------------------------------
+
+# importorskip takes IMPORT names; pyproject declares DISTRIBUTION names. Only the ones
+# that genuinely differ belong here, and the mapping is explicit so a wrong guess fails
+# loudly rather than quietly excusing an undeclared package.
+# Deliberately minimal: only names this repo actually gates a module on today. A
+# speculative entry for a package nobody declares would be a pre-authorised excuse, which
+# is what test_the_mapping_itself_is_not_stale below exists to prevent. Add a line when a
+# guard needs one, not before.
+IMPORT_TO_DISTRIBUTION = {
+    "PIL": "pillow",
+}
+
+# Modules the standard library provides on every supported version. tomllib is NOT here:
+# it is stdlib only from 3.11, and on 3.10 it needs the tomli distribution, which is
+# exactly the second gap this rule caught.
+STDLIB_SAFE = {"json", "sqlite3", "tomllib"}
+
+
+def _module_level_importorskips() -> dict[str, set[str]]:
+    """{test file: {import names it refuses to run without}}.
+
+    Only module level. A call inside a function skips one test and is a deliberate,
+    visible choice; a call at import time deletes the whole file from the run.
+    """
+    found: dict[str, set[str]] = {}
+    pattern = re.compile(r"^(?:[A-Za-z_][A-Za-z0-9_]*\s*=\s*)?_?pytest\.importorskip\(\s*['\"]([^'\"]+)['\"]")
+    for path in sorted((ROOT / "tests").rglob("test_*.py")):
+        names = {
+            m.group(1).split(".")[0]
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if (m := pattern.match(line))
+        }
+        if names:
+            found[str(path.relative_to(ROOT))] = names
+    return found
+
+
+def test_every_module_level_importorskip_names_a_declared_package() -> None:
+    """A whole test file may only be gated on something the project can install.
+
+    This is the check that would have caught httpx. It fails on the name of the package
+    and the file it silently disabled, because "some tests did not run" is not a message
+    anyone acts on.
+    """
+    declared = _declared_names()
+    undeclared: list[str] = []
+    for test_file, imports in _module_level_importorskips().items():
+        for import_name in sorted(imports):
+            if import_name in STDLIB_SAFE:
+                continue
+            dist = _normalise(IMPORT_TO_DISTRIBUTION.get(import_name, import_name))
+            if dist not in declared:
+                undeclared.append(
+                    f"{test_file} skips itself entirely without {import_name!r} "
+                    f"(distribution {dist!r}), which pyproject.toml does not declare. "
+                    "Installing this project can never satisfy that guard, so the file "
+                    "runs only where the package arrived by accident."
+                )
+    assert not undeclared, "test modules gated on undeclared packages:\n  " + "\n  ".join(undeclared)
+
+
+def test_the_mapping_itself_is_not_stale() -> None:
+    """Every entry in IMPORT_TO_DISTRIBUTION must point at something actually declared.
+
+    Otherwise the mapping becomes a way to excuse an undeclared package: add a line here
+    and the check above stops complaining without anything being fixed.
+    """
+    declared = _declared_names()
+    stale = [
+        f"{imp} -> {dist}" for imp, dist in IMPORT_TO_DISTRIBUTION.items()
+        if _normalise(dist) not in declared
+    ]
+    assert not stale, (
+        "IMPORT_TO_DISTRIBUTION maps to packages pyproject.toml does not declare, which "
+        f"would let an undeclared dependency pass as mapped: {stale}"
+    )

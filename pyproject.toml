@@ -108,6 +108,16 @@ demo = [
 dev = [
   "pytest>=8.1",
   "pytest-cov>=5.0",
+  # UNDECLARED UNTIL NOW, AND THAT HID A SKIPPING MODULE. starlette's TestClient is an
+  # httpx client, so tests/unit/test_forge_app.py guards itself with
+  # importorskip("httpx"). Nothing declared httpx, so it was present on the author's
+  # machine by accident and absent in CI, where the module skipped in full. The earlier
+  # fix for "test_forge_app.py never runs in CI" added the serve extra, which satisfied
+  # the fastapi guard and stopped one guard short of the httpx one.
+  "httpx>=0.27",
+  # Same class of gap: test_dependency_declaration.py needs tomllib, which is stdlib only
+  # from 3.11. On the 3.10 leg of the matrix it importorskip'd a package nobody installed.
+  'tomli>=2.0; python_version < "3.11"',
   # Upper bound deliberate. An unbounded linter pin means CI breaks on the
   # linter's release schedule rather than on a change to this repo: ruff 0.16
   # reported 109 errors against code that was clean under the 0.4 this range
