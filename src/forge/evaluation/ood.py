@@ -1,4 +1,9 @@
-"""External benchmark loaders. EVAL-ONLY. These never enter a training split.
+"""External benchmark label checking. EVAL-ONLY: these sets never enter a training split.
+
+Loading lives in scripts/eval_ood.py, which is what produced the committed score arrays
+in reports/experiments/. This module used to declare load_raid/load_mage/load_hc3 as
+stubs beside that working path, which meant the repo advertised three loaders that
+raised while the real ones sat in a script. They are gone.
 
 MAGE label polarity is asserted at load time rather than trusted. The HF card says 1
 means machine-generated, but the original DeepfakeTextDetect release used the opposite
@@ -19,18 +24,6 @@ def assert_label_polarity(known_human_scores, known_machine_scores) -> None:
         raise AssertionError(
             f"label polarity looks inverted: mean machine score {m:.4g} <= mean human score {h:.4g}"
         )
-
-
-def load_raid(split: str = "RAID-extra", excluded_domains=("code", "czech", "german")):  # noqa: ANN001, ANN201
-    raise NotImplementedError("Phase 5")
-
-
-def load_mage(split: str = "test"):  # noqa: ANN201
-    raise NotImplementedError("Phase 5")
-
-
-def load_hc3():  # noqa: ANN201
-    raise NotImplementedError("Phase 5")
 
 
 def contamination_check(train_hashes: set[str], eval_hashes: set[str]) -> set[str]:

@@ -4,7 +4,7 @@ Note the asymmetry with serving. vLLM belongs HERE, on the generation side, wher
 workload is autoregressive decoding of hundreds of thousands of documents and
 continuous batching genuinely helps. It does not belong on the detector's serving path,
 which runs a bidirectional encoder with a fixed window and no KV cache. See
-src/forge/inference/server.py.
+docs/jd_coverage.md.
 
 Every backend must report a concrete `revision`. `require_pinned_revision` refuses to
 run against an unpinned model, because "generated with Qwen 7B" is not a reproducible

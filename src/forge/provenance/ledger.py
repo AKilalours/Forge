@@ -8,10 +8,6 @@ document id leave the machine; the text never does. See data_spec_v1 section 8.
 from __future__ import annotations
 
 
-def record_acquisition(source_id: str, license: str, config: str | None = None) -> dict:
-    raise NotImplementedError("Phase 1")
-
-
 def redistributable_view(record: dict) -> dict:
     """Strip `text` from a record whose license forbids republication."""
     if record.get("redistributable"):
