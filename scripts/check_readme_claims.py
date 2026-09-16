@@ -295,6 +295,28 @@ def main(check_test_count: bool = True) -> int:
             "cpu_latency.json is not committed"
         )
 
+    # ---- thread sweep ---------------------------------------------------------
+    th_path = REPORTS / "inference" / "cpu_threads.json"
+    if "| Threads | Windows/s |" in md:
+        if not th_path.exists():
+            bad.append("README publishes a thread sweep but cpu_threads.json is missing")
+        else:
+            th = {r["threads"]: r for r in json.loads(th_path.read_text())["rows"]}
+            for row_key, cells in table_rows(md, "| Threads | Windows/s |").items():
+                n = int(row_key)
+                if n not in th:
+                    bad.append(f"thread table has {n} threads, the artifact does not")
+                    continue
+                r_ = th[n]
+                for label, published, stored, pct in [
+                    ("windows/s", cells[0], r_["windows_per_second"], False),
+                    ("speedup", cells[1], r_["speedup_over_one_thread"], False),
+                    ("efficiency", cells[2], r_["efficiency"], True),
+                ]:
+                    if not close(published, float(stored), percent=pct):
+                        bad.append(f"threads={n} {label}: README {published!r} vs "
+                                   f"artifact {stored!r}")
+
     # ---- spark local sweep ----------------------------------------------------
     spark_path = REPORTS / "spark" / "spark_summary.json"
     if "| Partitions | Threads each |" in md:

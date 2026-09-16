@@ -215,10 +215,42 @@ committed artifact and fails if the constant and the measurement ever disagree a
 budget in the release gate". Until this sweep, no P95 had ever been measured, so two
 modules were citing a budget that had no artifact behind it. There is one now.
 
+#### Threads are the lever, and there are not many of them
+
+The batch sweep above says what does *not* help. This says what does, at the batch size the
+server actually uses, on the same 10-core machine:
+
+| Threads | Windows/s | Speedup | Efficiency |
+|---|---|---|---|
+| 1 | 2.66 | 1.00 | 100.0% |
+| 2 | 3.70 | 1.39 | 69.5% |
+| 4 | 4.28 | 1.61 | 40.2% |
+| 8 | 4.80 | 1.80 | 22.6% |
+| 10 | 4.84 | 1.82 | 18.2% |
+
+**Ten cores buy roughly 1.8x, and the curve is flat by four.** Torch's intra-op scaling on
+this model is badly sublinear, which is the real ceiling on the serving path: not batch
+size, not partitioning, just the fact that one 512-token encoder forward does not
+parallelise well across cores.
+
+That is independently corroborated by the Spark sweep below, which found two partitions of
+five threads beating one partition of ten. Those two results only agree if ten threads buy
+well under 10x, and they were measured for different reasons on different code.
+
+> **The spread, stated rather than smoothed.** This sweep was run twice. The 1-thread
+> baseline came out 2.29 then 2.66, a 16% difference, and the speedup at 10 threads came
+> out 2.02 then 1.82. The baseline is the noisiest point by construction: longest
+> per-sample time, so fewest samples inside the per-point budget, and it is the denominator
+> for every other row. The rows at 4, 8 and 10 threads agree within 5%. So the honest claim
+> is **1.8 to 2.0x**, not a third significant figure. A third run was not taken because it
+> would move 1.9x to 1.9x. Both runs and a discarded contaminated one are recorded in
+> `cpu_threads.json`.
+
 > **Two caveats, before anyone else finds them.** `torch_threads` was 4 on the machine
-> that produced this. On a compute-bound CPU forward, thread count is a larger lever than
-> batch size, so the absolute figures are probably understated; the batch comparison holds
-> because every point ran under the same thread count. And batch 32 got 3 samples under
+> that produced this, torch's default rather than the machine's 10. That suspicion is now
+> measured: the thread sweep above shows the default leaves about 1.8x on the table, so
+> every latency figure in the batch table is understated by roughly that. The batch
+> comparison itself holds, because every point ran under the same thread count. And batch 32 got 3 samples under
 > the sweep's per-point time budget, so treat the size of its degradation as approximate
 > and its direction as real. The artifact records the sample count per row for exactly
 > this reason.

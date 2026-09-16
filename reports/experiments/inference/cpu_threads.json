@@ -1,0 +1,74 @@
+{
+ "device": "cpu",
+ "host_cpu_count": 10,
+ "fixed": "peak throughput across the batch sweep, at each thread count",
+ "note": "One process per thread count. torch.set_num_threads does not reliably resize a thread pool that has already run work, so measuring several counts inside one process silently reports the first one several times.",
+ "rows": [
+  {
+   "threads": 1,
+   "requested_threads": 1,
+   "peak_batch": 8,
+   "windows_per_second": 2.66,
+   "speedup_over_one_thread": 1.0,
+   "efficiency": 1.0
+  },
+  {
+   "threads": 2,
+   "requested_threads": 2,
+   "peak_batch": 8,
+   "windows_per_second": 3.7,
+   "speedup_over_one_thread": 1.391,
+   "efficiency": 0.695
+  },
+  {
+   "threads": 4,
+   "requested_threads": 4,
+   "peak_batch": 8,
+   "windows_per_second": 4.28,
+   "speedup_over_one_thread": 1.609,
+   "efficiency": 0.402
+  },
+  {
+   "threads": 8,
+   "requested_threads": 8,
+   "peak_batch": 8,
+   "windows_per_second": 4.8,
+   "speedup_over_one_thread": 1.805,
+   "efficiency": 0.226
+  },
+  {
+   "threads": 10,
+   "requested_threads": 10,
+   "peak_batch": 8,
+   "windows_per_second": 4.84,
+   "speedup_over_one_thread": 1.82,
+   "efficiency": 0.182
+  }
+ ],
+ "reproducibility": {
+  "runs_taken": 2,
+  "windows_per_second_run1": {
+   "1": 2.29,
+   "2": 3.3,
+   "4": 4.51,
+   "8": 4.75,
+   "10": 4.63
+  },
+  "windows_per_second_run2": {
+   "1": 2.66,
+   "2": 3.7,
+   "4": 4.28,
+   "8": 4.8,
+   "10": 4.84
+  },
+  "speedup_at_10_threads": [
+   2.02,
+   1.82
+  ],
+  "note": "Two clean runs of the same sweep. The 1-thread baseline moved 16% between them (2.29 then 2.66), which carries into every speedup because it is the denominator. It is the noisiest point by construction: longest per-sample time, so fewest samples inside the per-point budget. The rows at 4, 8 and 10 threads agree within 5%. So the SHAPE reproduces and the third significant figure does not, and the honest claim is a range.",
+  "discarded_run": {
+   "windows_per_second_at_1_thread": 1.48,
+   "why": "Taken immediately after an interrupted sweep, almost certainly against an orphaned child process competing for cores. Recorded here rather than deleted: it is the reason the sweep was repeated at all, and a measurement you threw away is part of the method."
+  }
+ }
+}

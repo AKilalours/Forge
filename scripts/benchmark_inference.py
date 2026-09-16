@@ -32,6 +32,7 @@ from pathlib import Path
 
 OUT = Path("reports/experiments/inference")
 ROOT_DIR = Path(__file__).resolve().parents[1]
+SERVING_BATCH = 8           # forge.inference.scorer.SERVING_BATCH_WINDOWS, the measured peak
 SEQ_LEN = 512               # configs/models/forge_base.yaml, and the serving window
 BACKBONE = "microsoft/deberta-v3-base"
 BATCH_SIZES = (1, 2, 4, 8, 16, 32)
@@ -52,7 +53,8 @@ def _percentile(values: list[float], q: float) -> float:
     return ordered[idx]
 
 
-def measure(device: str, repeats: int, threads: int | None = None) -> dict:
+def measure(device: str, repeats: int, threads: int | None = None,
+            only_batch: int | None = None) -> dict:
     import torch
 
     from forge.modeling.encoder import ForgeConfig, build_model
@@ -122,7 +124,12 @@ def measure(device: str, repeats: int, threads: int | None = None) -> dict:
 
     print(f"{'batch':>6} {'median ms':>10} {'p95 ms':>9} {'win/s':>9} {'ms/window':>10} "
           f"{'samples':>8}", flush=True)
-    batch_rows = [{"batch_windows": b, **timed(b)} for b in BATCH_SIZES]
+    # only_batch exists for the thread sweep. Scanning every batch size at every thread
+    # count is ~40 minutes of mostly redundant work: the batch sweep already established
+    # that throughput is flat in batch size, so re-establishing it at five thread counts
+    # measures the same flat line five times. The thread question needs one batch size.
+    sizes = (only_batch,) if only_batch else BATCH_SIZES
+    batch_rows = [{"batch_windows": b, **timed(b)} for b in sizes]
 
     # A document of N windows is scored in one forward, so its latency IS the batch row for
     # N. The first version of this script re-measured them, doubling the runtime to
@@ -135,7 +142,11 @@ def measure(device: str, repeats: int, threads: int | None = None) -> dict:
     ]
 
     best = max(batch_rows, key=lambda r: r["windows_per_second"])
-    single = next(r for r in batch_rows if r["batch_windows"] == 1)
+    # batch 1 is only present in a full sweep. --only-batch measures one point, so the
+    # speedup-over-batch-1 figure has no denominator. None is correct; reaching for a row
+    # that is not there raised StopIteration, and substituting "the smallest row we happen
+    # to have" would quietly redefine the ratio.
+    single = next((r for r in batch_rows if r["batch_windows"] == 1), None)
     result = {
         "device": device,
         "device_name": (
@@ -155,19 +166,23 @@ def measure(device: str, repeats: int, threads: int | None = None) -> dict:
         "peak_throughput": {
             "batch_windows": best["batch_windows"],
             "windows_per_second": best["windows_per_second"],
-            "speedup_over_batch_1": round(
-                best["windows_per_second"] / single["windows_per_second"], 2
+            "speedup_over_batch_1": (
+                round(best["windows_per_second"] / single["windows_per_second"], 2)
+                if single else None
             ),
         },
     }
     OUT.mkdir(parents=True, exist_ok=True)
-    path = OUT / f"{device}_latency.json"
+    path = OUT / (f"{device}_latency.json" if not only_batch
+                  else f"{device}_latency_b{only_batch}_t{torch.get_num_threads()}.json")
     path.write_text(json.dumps(result, indent=1) + "\n")
 
     print(f"\ndevice: {result['device_name']}  threads: {result['torch_threads']}")
-    print(f"peak throughput at batch {best['batch_windows']}: "
-          f"{best['windows_per_second']:.2f} windows/s, "
-          f"{result['peak_throughput']['speedup_over_batch_1']}x batch 1")
+    line = (f"peak throughput at batch {best['batch_windows']}: "
+            f"{best['windows_per_second']:.2f} windows/s")
+    if single:
+        line += f", {result['peak_throughput']['speedup_over_batch_1']}x batch 1"
+    print(line)
     print(f"wrote {path}")
     return result
 
@@ -191,12 +206,12 @@ def thread_sweep(device: str, repeats: int) -> dict:
     for n in counts:
         proc = subprocess.run(
             [sys.executable, __file__, "--device", device, "--threads", str(n),
-             "--repeats", str(repeats)],
+             "--repeats", str(repeats), "--only-batch", str(SERVING_BATCH)],
             capture_output=True, text=True, cwd=ROOT_DIR,
         )
         if proc.returncode != 0:
             raise RuntimeError(f"thread={n} run failed:\n{proc.stdout[-2000:]}\n{proc.stderr[-2000:]}")
-        data = json.loads((OUT / f"{device}_latency.json").read_text())
+        data = json.loads((OUT / f"{device}_latency_b{SERVING_BATCH}_t{n}.json").read_text())
         peak = data["peak_throughput"]
         rows.append({
             "threads": data["torch_threads"],
@@ -237,6 +252,9 @@ if __name__ == "__main__":
     ap.add_argument("--threads", type=int, default=None,
                     help="intra-op threads. Default leaves torch's own choice, which on a "
                          "10-core Mac is 4 and understates every figure by about a third.")
+    ap.add_argument("--only-batch", type=int, default=None,
+                    help="measure a single batch size. Used by --thread-sweep so it does "
+                         "not re-measure a flat curve once per thread count.")
     ap.add_argument("--thread-sweep", action="store_true",
                     help="scan thread count at a fixed batch size. On CPU this is the "
                          "dimension that actually moves throughput.")
@@ -247,4 +265,4 @@ if __name__ == "__main__":
     if a.thread_sweep:
         thread_sweep(a.device, a.repeats)
     else:
-        measure(a.device, a.repeats, a.threads)
+        measure(a.device, a.repeats, a.threads, a.only_batch)
