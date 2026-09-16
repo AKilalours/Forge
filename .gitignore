@@ -33,3 +33,7 @@ data/publishable/
 data/
 !data/**/.gitkeep
 demo/
+
+# Chrome traces are tens of MB and need a viewer. The ranked summary beside each
+# one is the committed artifact.
+reports/experiments/profile/*_trace.json
