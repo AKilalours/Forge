@@ -1,0 +1,17 @@
+{
+ "world_size": 1,
+ "strategy": "fsdp",
+ "per_device_batch": 16,
+ "grad_accum": 4,
+ "global_batch_size": 64,
+ "seq_len": 512,
+ "precision": "bf16",
+ "gradient_checkpointing": false,
+ "steps": 12,
+ "wall_seconds": 11.809,
+ "examples_per_second": 65.035,
+ "tokens_per_second": 33297.7,
+ "seconds_per_step": 0.9841,
+ "peak_memory_gib": 13.25,
+ "device_name": "NVIDIA A100-SXM4-80GB"
+}
