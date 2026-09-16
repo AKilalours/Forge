@@ -27,7 +27,7 @@ so they were removed rather than left raising.
 | 7 | Large-scale data processing (Spark, Beam) | `cleaning/pipeline.py` on Polars and PyArrow, one machine. **No Spark and no Beam in this repo.** | 1 | Polars path implemented; Spark/Beam **absent** |
 | 8 | Orchestration (Airflow) | **Not in this repo.** See the note below. | 8 | **absent** |
 | 9 | MLOps and experiment tracking | `registry/model_registry.py`, W&B config in every training YAML, `MANIFEST.json` dataset versioning | 3 | registry contract implemented |
-| 10 | DevOps tools | `.github/workflows/ci.yml`, `Makefile`, `infra/docker/`, `pyproject.toml`, ruff/mypy/pytest | 0 | **implemented** |
+| 10 | DevOps tools | `.github/workflows/ci.yml` (lint, tests, spec check, README claim check), `Makefile`, `infra/docker/`, `pyproject.toml`, ruff/mypy/pytest | 0 | **implemented**, and the workflow now actually triggers: it was pinned to a `main` branch this repo does not have |
 | 11 | Cloud infrastructure (AWS/GCP) | `infra/docker/`, `infra/terraform/` (README only), S3/MinIO storage layout in spec section 8. Compute ran on RunPod; the app deploys on Streamlit Community Cloud. | 7 and 8 | planned |
 
 ---

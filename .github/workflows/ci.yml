@@ -1,9 +1,14 @@
 name: ci
 
 on:
+  # This said [main]. The repository's only branch, and its default, is master, so
+  # this workflow existed, showed as active, was cited in docs/jd_coverage.md as the
+  # evidence that DevOps is implemented, and never ran once. Both names are listed now
+  # so a later rename cannot silently switch it off again.
   push:
-    branches: [main]
+    branches: [master, main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   test:
