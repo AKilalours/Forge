@@ -142,9 +142,82 @@ def benchmark_matrix(
     return out
 
 
-def build(cfg: DistConfig, model, optimizer=None):  # pragma: no cover - needs hardware
-    raise NotImplementedError(
-        "Live process-group construction needs multiple GPUs. The configs these "
-        "strategies consume are generated and tested; see deepspeed_config, fsdp_plan "
-        "and ray_scaling_config."
+def _transformer_layer_class(model):
+    """The class FSDP should shard at, found rather than hardcoded.
+
+    Sharding at the transformer LAYER boundary is what makes FSDP save memory; wrapping
+    the whole model shards nothing useful. HuggingFace encoders keep their layers in a
+    ModuleList, so the class is readable off the first element instead of being a
+    per-backbone constant that goes stale when the backbone changes.
+    """
+    for attr in ("encoder.encoder.layer", "encoder.layer", "layers", "encoder.layers"):
+        node = model
+        for part in attr.split("."):
+            node = getattr(node, part, None)
+            if node is None:
+                break
+        if node is not None and len(node):
+            return type(node[0])
+    return None
+
+
+def build(cfg: DistConfig, model, optimizer=None):  # pragma: no cover - needs >1 GPU
+    """Wrap `model` in the strategy `cfg` names. Returns the wrapped model.
+
+    Only fsdp is live. deepspeed and ray are config generators here: their configs are
+    produced and tested by this module, but launching them needs their own runtimes and
+    entry points, and a half-wired launcher that silently falls back to single-device is
+    worse than one that says it is not implemented.
+    """
+    if cfg.strategy == "none":
+        return model
+    if cfg.strategy != "fsdp":
+        raise NotImplementedError(
+            f"strategy {cfg.strategy!r} has a config generator here but no launcher. "
+            "Use deepspeed_config with the deepspeed entry point, or ray_scaling_config "
+            "with Ray Train."
+        )
+
+    import torch
+    from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+    from torch.distributed.fsdp import MixedPrecision, ShardingStrategy
+    from torch.distributed.fsdp.wrap import (
+        size_based_auto_wrap_policy,
+        transformer_auto_wrap_policy,
+    )
+
+    plan = fsdp_plan(cfg)
+    dtype = {"bf16": torch.bfloat16, "fp16": torch.float16, "fp32": torch.float32}[cfg.precision]
+    strategy = {
+        "full_shard": ShardingStrategy.FULL_SHARD,
+        "shard_grad_op": ShardingStrategy.SHARD_GRAD_OP,
+        "no_shard": ShardingStrategy.NO_SHARD,
+    }[plan["sharding_strategy"]]
+
+    layer_cls = _transformer_layer_class(model)
+    if layer_cls is not None:
+        import functools
+
+        policy = functools.partial(transformer_auto_wrap_policy, transformer_layer_cls={layer_cls})
+    else:
+        # Falling back is reported, not silent: a size-based policy shards at arbitrary
+        # boundaries and will not match the plan this module emitted.
+        import functools
+        import warnings
+
+        warnings.warn(
+            "no transformer layer ModuleList found; falling back to a size-based wrap "
+            "policy, which does NOT match fsdp_plan's transformer_layer setting",
+            stacklevel=2,
+        )
+        policy = functools.partial(size_based_auto_wrap_policy, min_num_params=1_000_000)
+
+    return FSDP(
+        model,
+        auto_wrap_policy=policy,
+        sharding_strategy=strategy,
+        mixed_precision=MixedPrecision(param_dtype=dtype, reduce_dtype=dtype, buffer_dtype=dtype),
+        limit_all_gathers=plan["limit_all_gathers"],
+        use_orig_params=plan["use_orig_params"],
+        device_id=torch.cuda.current_device(),
     )

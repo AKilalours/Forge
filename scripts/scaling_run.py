@@ -1,0 +1,198 @@
+"""Measure FSDP training throughput at one world size. Launched by torchrun.
+
+    torchrun --nproc_per_node=1 scripts/scaling_run.py
+    torchrun --nproc_per_node=2 scripts/scaling_run.py
+    torchrun --nproc_per_node=4 scripts/scaling_run.py
+    python scripts/scaling_run.py --summarise
+
+THE INVARIANT THIS HARNESS EXISTS TO HOLD. Every world size runs the SAME global batch,
+with gradient accumulation absorbing the difference, because a comparison run at two
+effective batch sizes is two experiments and its speedup number means nothing. That rule
+and the arithmetic behind it live in forge.training.scaling; this script calls them rather
+than reimplementing them, so the invariant is enforced by the module that documents it.
+
+Gradient checkpointing is OFF here, and that is a measured decision rather than a default:
+reports/experiments/profile/train_step_comparison.json shows it costing 24% of step time
+to save memory an 80GB card does not need.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import time
+from pathlib import Path
+
+OUT = Path("reports/experiments/scaling")
+TARGET_GLOBAL_BATCH = 64      # configs/training/baseline.yaml: batch_size 32 x grad_accum 2
+PER_DEVICE_BATCH = 16         # divides cleanly at world sizes 1, 2 and 4
+SEQ_LEN = 512                 # configs/models/forge_base.yaml
+BACKBONE = "microsoft/deberta-v3-base"
+
+
+def measure(steps: int) -> dict:
+    import torch
+    import torch.distributed as dist
+
+    from forge.modeling.encoder import ForgeConfig, build_model
+    from forge.training.distributed import DistConfig, build
+    from forge.training.scaling import (
+        ThroughputMeasurement,
+        assert_global_batch_invariant,
+        grad_accum_for_world_size,
+    )
+
+    rank = int(os.environ.get("RANK", 0))
+    world_size = int(os.environ.get("WORLD_SIZE", 1))
+    local_rank = int(os.environ.get("LOCAL_RANK", 0))
+    torch.cuda.set_device(local_rank)
+    dist.init_process_group(backend="nccl")
+
+    accum = grad_accum_for_world_size(TARGET_GLOBAL_BATCH, PER_DEVICE_BATCH, world_size)
+    cfg = DistConfig(
+        strategy="fsdp", world_size=world_size, per_device_batch=PER_DEVICE_BATCH,
+        grad_accum=accum, precision="bf16", gradient_checkpointing=False,
+    )
+    # Reject a broken matrix here rather than after producing a speedup number.
+    assert_global_batch_invariant(
+        [{"per_device_batch": PER_DEVICE_BATCH, "grad_accum": accum, "world_size": world_size}],
+        label=f"world_size={world_size}",
+    )
+
+    torch.manual_seed(42)
+    model = build_model(ForgeConfig(backbone=BACKBONE, max_length=SEQ_LEN)).cuda()
+    model = build(cfg, model)
+    model.train()
+    optimizer = torch.optim.AdamW(model.parameters(), lr=2e-5, weight_decay=0.01)
+
+    g = torch.Generator(device="cpu").manual_seed(42 + rank)
+    vocab = 128100  # deberta-v3-base
+    ids = torch.randint(0, vocab, (PER_DEVICE_BATCH, SEQ_LEN), generator=g).cuda()
+    batch = {
+        "input_ids": ids,
+        "attention_mask": torch.ones_like(ids),
+        "doc_labels": torch.randint(0, 2, (PER_DEVICE_BATCH,), generator=g).cuda(),
+        "token_labels": torch.randint(0, 3, (PER_DEVICE_BATCH, SEQ_LEN), generator=g).cuda(),
+    }
+
+    def one_step():
+        optimizer.zero_grad(set_to_none=True)
+        for _ in range(accum):   # the accumulation that holds the global batch fixed
+            with torch.autocast("cuda", dtype=torch.bfloat16):
+                out = model(batch["input_ids"], batch["attention_mask"],
+                            batch["doc_labels"], batch["token_labels"])
+            (out["loss"] / accum).backward()
+        optimizer.step()
+
+    for _ in range(3):
+        one_step()
+    torch.cuda.synchronize()
+    dist.barrier()          # every rank starts the timed region together, or the wall
+                            # clock of rank 0 includes other ranks' warmup
+
+    t0 = time.perf_counter()
+    for _ in range(steps):
+        one_step()
+    torch.cuda.synchronize()
+    dist.barrier()
+    wall = time.perf_counter() - t0
+
+    m = ThroughputMeasurement(
+        world_size=world_size, steps=steps, wall_seconds=wall,
+        global_batch_size=cfg.global_batch_size, tokens_per_example=SEQ_LEN,
+    )
+    result = {
+        "world_size": world_size,
+        "strategy": "fsdp",
+        "per_device_batch": PER_DEVICE_BATCH,
+        "grad_accum": accum,
+        "global_batch_size": cfg.global_batch_size,
+        "seq_len": SEQ_LEN,
+        "precision": "bf16",
+        "gradient_checkpointing": False,
+        "steps": steps,
+        "wall_seconds": round(wall, 3),
+        "examples_per_second": round(m.examples_per_second(), 3),
+        "tokens_per_second": round(m.tokens_per_second(), 1),
+        "seconds_per_step": round(m.seconds_per_step(), 4),
+        "peak_memory_gib": round(torch.cuda.max_memory_allocated() / 1024**3, 2),
+        "device_name": torch.cuda.get_device_name(0),
+    }
+    if rank == 0:
+        OUT.mkdir(parents=True, exist_ok=True)
+        (OUT / f"ws{world_size}.json").write_text(json.dumps(result, indent=1) + "\n")
+        print(json.dumps(result, indent=1), flush=True)
+    dist.destroy_process_group()
+    return result
+
+
+def summarise() -> int:
+    from forge.training.scaling import ScalingError, ThroughputMeasurement, scaling_efficiency
+
+    runs = {}
+    for f in sorted(OUT.glob("ws*.json")):
+        d = json.loads(f.read_text())
+        runs[d["world_size"]] = d
+    if 1 not in runs:
+        print("no ws1.json: the single-GPU baseline is what every efficiency is measured against")
+        return 1
+
+    def tm(d):
+        return ThroughputMeasurement(
+            world_size=d["world_size"], steps=d["steps"], wall_seconds=d["wall_seconds"],
+            global_batch_size=d["global_batch_size"], tokens_per_example=d["seq_len"],
+        )
+
+    base = tm(runs[1])
+    rows = []
+    for ws in sorted(runs):
+        d = runs[ws]
+        try:
+            eff = 1.0 if ws == 1 else scaling_efficiency(base, tm(d))
+        except ScalingError as e:
+            print(f"ws{ws}: {e}")
+            continue
+        rows.append({
+            "world_size": ws,
+            "examples_per_second": d["examples_per_second"],
+            "tokens_per_second": d["tokens_per_second"],
+            "seconds_per_step": d["seconds_per_step"],
+            "peak_memory_gib": d["peak_memory_gib"],
+            "speedup": round(d["examples_per_second"] / runs[1]["examples_per_second"], 3),
+            "scaling_efficiency": round(eff, 3),
+        })
+
+    out = {
+        "strategy": "fsdp",
+        "device_name": runs[1]["device_name"],
+        "global_batch_size": runs[1]["global_batch_size"],
+        "seq_len": runs[1]["seq_len"],
+        "precision": runs[1]["precision"],
+        "gradient_checkpointing": runs[1]["gradient_checkpointing"],
+        "invariant": (
+            "Every world size runs the same global batch; grad_accum absorbs the "
+            "difference. Efficiency is speedup divided by world size, so 1.0 is linear "
+            "and never happens."
+        ),
+        "rows": rows,
+    }
+    path = OUT / "scaling_summary.json"
+    path.write_text(json.dumps(out, indent=1) + "\n")
+    print(f"{'ws':>3} {'ex/s':>9} {'tok/s':>11} {'s/step':>8} {'peak GiB':>9} "
+          f"{'speedup':>8} {'efficiency':>11}")
+    for r in rows:
+        print(f"{r['world_size']:>3} {r['examples_per_second']:>9.2f} "
+              f"{r['tokens_per_second']:>11.0f} {r['seconds_per_step']:>8.3f} "
+              f"{r['peak_memory_gib']:>9.2f} {r['speedup']:>8.2f} "
+              f"{r['scaling_efficiency']:>11.1%}")
+    print(f"wrote {path}")
+    return 0
+
+
+if __name__ == "__main__":
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--steps", type=int, default=12)
+    ap.add_argument("--summarise", action="store_true")
+    a = ap.parse_args()
+    raise SystemExit(summarise() if a.summarise else (measure(a.steps) and 0))
