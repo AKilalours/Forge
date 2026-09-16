@@ -46,12 +46,32 @@ class DistConfig:
         return global_batch(self.per_device_batch, self.grad_accum, self.world_size)
 
 
-def deepspeed_config(cfg: DistConfig, lr: float, warmup_steps: int = 500) -> dict[str, Any]:
+def deepspeed_config(cfg: DistConfig, lr: float, warmup_steps: int = 500,
+                     total_num_steps: int | None = None) -> dict[str, Any]:
     """Emit a DeepSpeed JSON config.
 
     `train_batch_size` here is DeepSpeed's GLOBAL batch and it validates
     train_batch_size == micro_batch * grad_accum * world_size internally. Deriving it
     rather than hardcoding it is what stops a benchmark drifting between strategies.
+
+    THE SCHEDULER IS OPTIONAL, AND THAT IS A BUG FIX. This function used to emit a
+    WarmupDecayLR block unconditionally, carrying warmup_min_lr, warmup_max_lr and
+    warmup_num_steps. DeepSpeed's WarmupDecayLR ALSO requires total_num_steps, so the
+    config was invalid and deepspeed.initialize() raised:
+
+        TypeError: WarmupDecayLR.__init__() missing 1 required positional argument:
+                   'total_num_steps'
+
+    Every test here asserted the shape of the returned dict. None handed it to DeepSpeed,
+    because that needs the library and a GPU. So a config generator whose output the
+    target rejects sat in the repo looking tested. That is the same failure as everything
+    else this project has turned up: the thing was written carefully and never executed.
+
+    total_num_steps=None now emits NO scheduler rather than an invalid one. A throughput
+    benchmark does not want a schedule anyway: a decaying learning rate changes the
+    numbers the optimizer produces and changes nothing about how long a step takes, so
+    including one adds a variable without adding information. Real training passes the
+    step count and gets the schedule.
     """
     if cfg.zero_stage not in (0, 1, 2, 3):
         raise ValueError("zero_stage must be 0, 1, 2 or 3")
@@ -70,14 +90,26 @@ def deepspeed_config(cfg: DistConfig, lr: float, warmup_steps: int = 500) -> dic
             "type": "AdamW",
             "params": {"lr": lr, "betas": [0.9, 0.999], "eps": 1e-8, "weight_decay": 0.01},
         },
-        "scheduler": {
-            "type": "WarmupDecayLR",
-            "params": {"warmup_min_lr": 0, "warmup_max_lr": lr, "warmup_num_steps": warmup_steps},
-        },
         "activation_checkpointing": {"partition_activations": cfg.gradient_checkpointing},
         "steps_per_print": 100,
         "wall_clock_breakdown": True,   # so profiling has something to read
     }
+    if total_num_steps is not None:
+        if total_num_steps < warmup_steps:
+            raise ValueError(
+                f"total_num_steps ({total_num_steps}) is below warmup_steps "
+                f"({warmup_steps}); the schedule would warm up past the end of training"
+            )
+        conf["scheduler"] = {
+            "type": "WarmupDecayLR",
+            "params": {
+                "warmup_min_lr": 0,
+                "warmup_max_lr": lr,
+                "warmup_num_steps": warmup_steps,
+                # REQUIRED by WarmupDecayLR. Omitting it is what made this config invalid.
+                "total_num_steps": total_num_steps,
+            },
+        }
     if cfg.precision == "bf16":
         conf["bf16"] = {"enabled": True}
     elif cfg.precision == "fp16":
@@ -223,7 +255,8 @@ class DistributedRun:
         return True
 
 
-def build_run(cfg: DistConfig, model, optimizer=None, lr: float = 2e-5) -> DistributedRun:
+def build_run(cfg: DistConfig, model, optimizer=None, lr: float = 2e-5,
+              total_num_steps: int | None = None) -> DistributedRun:
     """Construct the strategy in `cfg` and return the object that drives its steps.
 
     This is the interface a benchmark should use. `build()` below returns a bare model,
@@ -246,7 +279,7 @@ def build_run(cfg: DistConfig, model, optimizer=None, lr: float = 2e-5) -> Distr
 
     import deepspeed  # noqa: PLC0415 - optional [dist] extra, absent on CPU machines
 
-    conf = deepspeed_config(cfg, lr=lr)
+    conf = deepspeed_config(cfg, lr=lr, total_num_steps=total_num_steps)
     engine, ds_optimizer, _, _ = deepspeed.initialize(
         model=model,
         model_parameters=[p for p in model.parameters() if p.requires_grad],

@@ -152,3 +152,95 @@ def test_ray_is_refused_with_a_reason_rather_than_half_wired() -> None:
 
     with pytest.raises(NotImplementedError, match="Ray Train"):
         build_run(DistConfig(strategy="ray", world_size=2, grad_accum=1), model=object())
+
+
+# ---------------------------------------------------------------------------
+# THE CONFIG GENERATOR EMITTED A CONFIG DEEPSPEED REJECTS.
+#
+# deepspeed_config() carried a WarmupDecayLR scheduler with warmup_min_lr, warmup_max_lr
+# and warmup_num_steps. WarmupDecayLR also requires total_num_steps, so the first call to
+# deepspeed.initialize() on a rented 2-GPU pod died with:
+#
+#   TypeError: WarmupDecayLR.__init__() missing 1 required positional argument:
+#              'total_num_steps'
+#
+# Every existing test asserted the SHAPE of the returned dict: keys present, global batch
+# derived correctly, zero_stage validated. None of them handed the dict to DeepSpeed,
+# because that needs the library and a GPU. So a generator whose output the target refuses
+# sat in the repo looking thoroughly tested.
+#
+# The lesson is narrow and worth keeping: testing that a function produces the dict you
+# INTENDED is not testing that the dict is VALID. For anything whose output is consumed by
+# another system, the contract worth pinning is that system's, not your own idea of it.
+# ---------------------------------------------------------------------------
+
+# WarmupDecayLR's required parameters, from DeepSpeed's own signature. Written down here
+# so the check runs on a laptop with no deepspeed installed, and cross-checked against the
+# real signature below whenever the library IS present.
+WARMUP_DECAY_LR_REQUIRED = {"warmup_min_lr", "warmup_max_lr", "warmup_num_steps",
+                            "total_num_steps"}
+
+
+def test_no_scheduler_is_emitted_when_the_step_count_is_unknown() -> None:
+    """An absent scheduler beats an invalid one.
+
+    A throughput benchmark does not want a schedule: a decaying learning rate changes what
+    the optimizer computes and changes nothing about how long a step takes.
+    """
+    from forge.training.distributed import deepspeed_config
+
+    conf = deepspeed_config(DistConfig(strategy="deepspeed", world_size=2,
+                                       per_device_batch=16, grad_accum=2), lr=2e-5)
+    assert "scheduler" not in conf, (
+        "emitting a scheduler without total_num_steps produces a config DeepSpeed refuses "
+        "to construct; omitting it produces one that works"
+    )
+
+
+def test_an_emitted_scheduler_carries_every_parameter_deepspeed_requires() -> None:
+    """THE REGRESSION. This is the assertion whose absence cost a pod session."""
+    from forge.training.distributed import deepspeed_config
+
+    conf = deepspeed_config(
+        DistConfig(strategy="deepspeed", world_size=2, per_device_batch=16, grad_accum=2),
+        lr=2e-5, warmup_steps=10, total_num_steps=100,
+    )
+    params = set(conf["scheduler"]["params"])
+    missing = WARMUP_DECAY_LR_REQUIRED - params
+    assert not missing, f"WarmupDecayLR would raise on construction, missing {missing}"
+
+
+def test_a_schedule_that_warms_up_past_the_end_of_training_is_refused() -> None:
+    """500 warmup steps inside a 100-step run is a config that runs and trains nothing:
+    the learning rate never leaves the ramp. It fails here instead."""
+    from forge.training.distributed import deepspeed_config
+
+    with pytest.raises(ValueError, match="warm up past the end"):
+        deepspeed_config(
+            DistConfig(strategy="deepspeed", world_size=2, per_device_batch=16,
+                       grad_accum=2),
+            lr=2e-5, warmup_steps=500, total_num_steps=100,
+        )
+
+
+def test_the_required_parameter_list_matches_deepspeeds_actual_signature() -> None:
+    """Keeps the hardcoded list honest wherever deepspeed is installed.
+
+    Without this, WARMUP_DECAY_LR_REQUIRED is my belief about DeepSpeed's API rather than
+    DeepSpeed's API, which is precisely the mistake being fixed. Skips cleanly on a
+    machine without the [dist] extra, and runs on any machine that has it.
+    """
+    import inspect
+
+    deepspeed = pytest.importorskip("deepspeed", reason="deepspeed is in the [dist] extra")
+    from deepspeed.runtime.lr_schedules import WarmupDecayLR
+
+    sig = inspect.signature(WarmupDecayLR.__init__)
+    required = {
+        name for name, param in sig.parameters.items()
+        if name not in ("self", "optimizer") and param.default is inspect.Parameter.empty
+    }
+    assert required <= WARMUP_DECAY_LR_REQUIRED, (
+        f"DeepSpeed {deepspeed.__version__} requires {required - WARMUP_DECAY_LR_REQUIRED} "
+        "which this test's list does not include"
+    )
