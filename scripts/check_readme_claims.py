@@ -18,17 +18,44 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REPORTS = ROOT / "reports" / "experiments"
+OUTPUTS = ROOT / "outputs"
+EXPERIMENT = {"A": "forge_min_baseline", "B": "forge_min_mirror"}
 BENCHMARKS = ("hc3", "raid", "mage")
 ARMS = {"A": "baseline", "B": "mirror"}
 
 
 def load(name: str) -> dict:
     return json.loads((REPORTS / name).read_text())
+
+
+def summary(arm_key: str) -> dict:
+    """The training run's own record, which is where the in-distribution table came from."""
+    return json.loads((OUTPUTS / EXPERIMENT[arm_key] / "summary.json").read_text())
+
+
+def collected_test_count() -> int | None:
+    """Ask pytest how many tests exist, for the badge that claims a number.
+
+    The badge is the only published figure with no artifact behind it, which is
+    precisely where an unchecked claim had been sitting. Returns None when pytest
+    cannot run, so a machine without the dev extra reports the gap instead of
+    passing quietly.
+    """
+    try:
+        out = subprocess.run(
+            [sys.executable, "-m", "pytest", "--collect-only", "-q"],
+            cwd=ROOT, capture_output=True, text=True, timeout=600,
+        ).stdout
+    except Exception:
+        return None
+    m = re.search(r"(\d+)\s+tests? collected", out)
+    return int(m.group(1)) if m else None
 
 
 def table_rows(md: str, header_fragment: str) -> dict[str, list[str]]:
@@ -63,7 +90,10 @@ def close(published: str, stored: float, *, percent: bool = False) -> bool:
     return round(value, decimals) == round(want, decimals)
 
 
-def main() -> int:
+def main(check_test_count: bool = True) -> int:
+    """check_test_count is False when called from inside pytest, because the count is
+    obtained BY running pytest and a test that spawns the collector it is running under
+    is slow at best and recursive at worst."""
     md = (ROOT / "README.md").read_text()
     bad: list[str] = []
 
@@ -95,6 +125,43 @@ def main() -> int:
         for label, published, stored in pairs:
             if not close(published, float(stored)):
                 bad.append(f"{bench} {label}: README {published!r} vs artifact {stored!r}")
+
+    # ---- in-distribution table ----------------------------------------------
+    # Backed by each run's own summary.json. Uncovered until now, which meant the
+    # headline "the two arms are the same detector" rested on nothing checkable.
+    ind = table_rows(md, "| Metric | Arm A · random |")
+    for arm_key in ARMS:
+        s = summary(arm_key)["val"]
+        i = 0 if arm_key == "A" else 1
+        for label, row_key, stored, pct in [
+            ("AUROC", "auroc", s["auroc"], False),
+            ("FNR at budget", "fnr at the 0.1% fpr budget", s["fnr"], True),
+            ("ECE", "expected calibration error", s["ece"], False),
+            ("threshold", "deployed threshold", s["threshold"], False),
+            ("realised FPR", "realised fpr", s["fpr_at_budget"], True),
+        ]:
+            published = ind[row_key][i]
+            if not close(published, stored, percent=pct):
+                bad.append(f"in-distribution {label} {arm_key}: README {published!r} vs artifact {stored!r}")
+
+    # ---- badges --------------------------------------------------------------
+    auroc_badge = re.search(r"In--distribution%20AUROC-([\d.]+)-", md)
+    if not auroc_badge or not close(auroc_badge.group(1), summary("A")["val"]["auroc"]):
+        bad.append("AUROC badge does not match arm A's summary.json")
+
+    fpr_badge = re.search(r"FPR%20budget-([\d.]+)%25-", md)
+    if not fpr_badge or not close(fpr_badge.group(1), summary("A")["fpr_budget"], percent=True):
+        bad.append("FPR budget badge does not match arm A's summary.json")
+
+    tests_badge = re.search(r"Tests-(\d+)%20passing", md)
+    counted = collected_test_count() if check_test_count else None
+    if tests_badge is None:
+        bad.append("no test-count badge found")
+    elif counted is None:
+        if check_test_count:
+            print("note: pytest could not be run, so the test-count badge was not checked")
+    elif int(tests_badge.group(1)) != counted:
+        bad.append(f"test count badge says {tests_badge.group(1)}, pytest collects {counted}")
 
     # ---- the one prose number worth pinning ---------------------------------
     # It is the whole argument of the RAID paragraph, so it gets checked like a table.

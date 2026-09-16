@@ -36,4 +36,6 @@ def test_bold_markers_are_not_part_of_the_number():
 
 
 def test_the_real_readme_currently_matches_every_artifact():
-    assert main() == 0
+    # check_test_count=False: obtaining the count means running pytest, and this IS
+    # pytest. CI checks the badge separately by invoking the script directly.
+    assert main(check_test_count=False) == 0
