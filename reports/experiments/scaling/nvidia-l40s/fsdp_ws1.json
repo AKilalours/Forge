@@ -1,0 +1,18 @@
+{
+ "world_size": 1,
+ "strategy": "fsdp",
+ "per_device_batch": 16,
+ "grad_accum": 4,
+ "global_batch_size": 64,
+ "seq_len": 512,
+ "precision": "bf16",
+ "gradient_checkpointing": false,
+ "steps": 12,
+ "wall_seconds": 13.1,
+ "examples_per_second": 58.627,
+ "tokens_per_second": 30016.8,
+ "seconds_per_step": 1.0917,
+ "peak_memory_gib": 13.25,
+ "device_name": "NVIDIA L40S",
+ "_note": "Transcribed from the pod terminal. The pod had no persistent volume, so these records were read off the session rather than copied from disk. Every field here appeared verbatim in the run's own JSON output."
+}

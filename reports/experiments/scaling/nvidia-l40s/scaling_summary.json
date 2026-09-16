@@ -1,0 +1,29 @@
+{
+ "strategy": "fsdp",
+ "device_name": "NVIDIA L40S",
+ "global_batch_size": 64,
+ "seq_len": 512,
+ "precision": "bf16",
+ "gradient_checkpointing": false,
+ "invariant": "Every world size runs the same global batch; grad_accum absorbs the difference. Efficiency is speedup divided by world size, so 1.0 is linear and never happens.",
+ "rows": [
+  {
+   "world_size": 1,
+   "examples_per_second": 58.627,
+   "tokens_per_second": 30016.8,
+   "seconds_per_step": 1.0917,
+   "peak_memory_gib": 13.25,
+   "speedup": 1.0,
+   "scaling_efficiency": 1.0
+  },
+  {
+   "world_size": 2,
+   "examples_per_second": 106.315,
+   "tokens_per_second": 54433.2,
+   "seconds_per_step": 0.602,
+   "peak_memory_gib": 11.85,
+   "speedup": 1.813,
+   "scaling_efficiency": 0.907
+  }
+ ]
+}

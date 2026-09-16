@@ -25,10 +25,28 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import time
 from pathlib import Path
 
 OUT = Path("reports/experiments/scaling")
+
+
+def device_slug(device_name: str) -> str:
+    """Filesystem-safe directory name for one GPU model.
+
+    WHY RECORDS ARE FILED BY DEVICE. They used to be <strategy>_ws<N>.json in one flat
+    directory, and those files persist across sessions. Re-running world sizes 1 and 2 on
+    an L40S pod overwrote two A100 records and left the A100's ws4 in place, producing a
+    curve that spanned two GPU models and reported 108.6% scaling efficiency. The same
+    collision, seen from the other side, would have destroyed a published measurement by
+    overwriting it.
+
+    A guard that detects a mixed summary is worth having, and it is downstream of the real
+    problem: the filename carried no device, so two machines were writing to one namespace.
+    Filing by device makes the collision impossible rather than detectable.
+    """
+    return re.sub(r"[^a-z0-9]+", "-", device_name.lower()).strip("-")
 TARGET_GLOBAL_BATCH = 64      # configs/training/baseline.yaml: batch_size 32 x grad_accum 2
 PER_DEVICE_BATCH = 16         # divides cleanly at world sizes 1, 2 and 4
 SEQ_LEN = 512                 # configs/models/forge_base.yaml
@@ -143,23 +161,49 @@ def measure(steps: int, strategy: str = "fsdp") -> dict:
         "device_name": torch.cuda.get_device_name(0),
     }
     if rank == 0:
-        OUT.mkdir(parents=True, exist_ok=True)
-        (OUT / f"{strategy}_ws{world_size}.json").write_text(json.dumps(result, indent=1) + "\n")
+        out_dir = OUT / device_slug(result["device_name"])
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / f"{strategy}_ws{world_size}.json").write_text(json.dumps(result, indent=1) + "\n")
         print(json.dumps(result, indent=1), flush=True)
     dist.destroy_process_group()
     return result
 
 
-def summarise(strategy: str = "fsdp") -> int:
+def _resolve_device(explicit: str | None) -> str | None:
+    """Pick which device directory to summarise.
+
+    Explicit wins. With exactly one present, use it. With several, REFUSE and list them,
+    rather than guessing and producing a curve for whichever sorted first.
+    """
+    if explicit:
+        return explicit
+    dirs = sorted(d.name for d in OUT.iterdir() if d.is_dir()) if OUT.exists() else []
+    if len(dirs) == 1:
+        return dirs[0]
+    if not dirs:
+        print(f"no device directories under {OUT}/. Run a measurement first.")
+        return None
+    print("several devices have records here, so --device is required:")
+    for d in dirs:
+        print(f"  --device {d}")
+    return None
+
+
+def summarise(strategy: str = "fsdp", device: str | None = None) -> int:
     from forge.training.scaling import ScalingError, ThroughputMeasurement, scaling_efficiency
 
+    slug = _resolve_device(device)
+    if slug is None:
+        return 1
+    out_dir = OUT / slug
+
     runs = {}
-    for f in sorted(OUT.glob(f"{strategy}_ws*.json")):
+    for f in sorted(out_dir.glob(f"{strategy}_ws*.json")):
         d = json.loads(f.read_text())
         runs[d["world_size"]] = d
     if 1 not in runs:
-        print(f"no {strategy}_ws1.json: the single-GPU baseline is what every "
-              "efficiency is measured against")
+        print(f"no {strategy}_ws1.json under {out_dir}/: the single-GPU baseline is "
+              "what every efficiency is measured against")
         return 1
 
     def tm(d):
@@ -167,6 +211,29 @@ def summarise(strategy: str = "fsdp") -> int:
             world_size=d["world_size"], steps=d["steps"], wall_seconds=d["wall_seconds"],
             global_batch_size=d["global_batch_size"], tokens_per_example=d["seq_len"],
         )
+
+    # THE DEVICE INVARIANT. summarise() globs <strategy>_ws*.json, and those files persist
+    # across sessions. Re-running world sizes 1 and 2 on a new pod overwrites those two and
+    # leaves ws4 from the PREVIOUS machine in place, so the table silently spans two
+    # hardware platforms. That is exactly what happened: an A100 ws4 row landed in an L40S
+    # curve and reported 108.6% scaling efficiency.
+    #
+    # Superlinear efficiency is the tell. It cannot happen, so a number above 100% always
+    # means the comparison is broken rather than the hardware being remarkable. Refusing
+    # here is better than printing it, because a reader who does not know that rule reads
+    # 108.6% as a good result.
+    devices = {runs[p].get("device_name", "unknown") for p in runs}
+    if len(devices) != 1:
+        by_device: dict[str, list[int]] = {}
+        for p in sorted(runs):
+            by_device.setdefault(runs[p].get("device_name", "unknown"), []).append(p)
+        print("REFUSING TO SUMMARISE: these runs are from different hardware, so the "
+              "speedup between them is not a speedup.")
+        for dev, ws in by_device.items():
+            print(f"  {dev}: world sizes {ws}")
+        print(f"Delete the stale records in {out_dir}/ or re-run every world size on "
+              "one machine.")
+        return 1
 
     base = tm(runs[1])
     rows = []
@@ -177,6 +244,12 @@ def summarise(strategy: str = "fsdp") -> int:
         except ScalingError as e:
             print(f"ws{ws}: {e}")
             continue
+        if eff > 1.0 + 1e-9:
+            print(f"REFUSING TO SUMMARISE: world size {ws} reports {eff:.1%} scaling "
+                  "efficiency. Above 100% is superlinear, which does not happen; it means "
+                  "the runs are not comparable. Check that every record has the same "
+                  "device_name, global_batch_size and gradient_checkpointing.")
+            return 1
         rows.append({
             "world_size": ws,
             "examples_per_second": d["examples_per_second"],
@@ -201,8 +274,8 @@ def summarise(strategy: str = "fsdp") -> int:
         ),
         "rows": rows,
     }
-    path = OUT / ("scaling_summary.json" if strategy == "fsdp"
-                  else f"scaling_summary_{strategy}.json")
+    path = out_dir / ("scaling_summary.json" if strategy == "fsdp"
+                      else f"scaling_summary_{strategy}.json")
     path.write_text(json.dumps(out, indent=1) + "\n")
     print(f"{'ws':>3} {'ex/s':>9} {'tok/s':>11} {'s/step':>8} {'peak GiB':>9} "
           f"{'speedup':>8} {'efficiency':>11}")
@@ -220,7 +293,11 @@ if __name__ == "__main__":
     ap.add_argument("--steps", type=int, default=12)
     ap.add_argument("--summarise", action="store_true")
     ap.add_argument("--strategy", default="fsdp", choices=("fsdp", "deepspeed"))
+    ap.add_argument("--device", default=None,
+                    help="device directory to summarise, e.g. nvidia-l40s. Required only "
+                         "when records from several GPU models are present.")
     a = ap.parse_args()
     raise SystemExit(
-        summarise(a.strategy) if a.summarise else (measure(a.steps, a.strategy) and 0)
+        summarise(a.strategy, a.device) if a.summarise
+        else (measure(a.steps, a.strategy) and 0)
     )

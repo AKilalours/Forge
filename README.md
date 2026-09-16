@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Tests-956%20passing-00C853?style=for-the-badge"/>
+  <img src="https://img.shields.io/badge/Tests-965%20passing-00C853?style=for-the-badge"/>
   <img src="https://img.shields.io/badge/In--distribution%20AUROC-0.99997-00C853?style=for-the-badge"/>
   <img src="https://img.shields.io/badge/FPR%20budget-0.1%25-0056D2?style=for-the-badge"/>
   <img src="https://img.shields.io/badge/Headline-Partial%20null%20result-FF8F00?style=for-the-badge"/>
@@ -258,6 +258,85 @@ well under 10x, and they were measured for different reasons on different code.
 **Scope.** This times the model forward over pre-tokenised windows. Tokenisation,
 windowing and HTTP are not included, so a real request costs this plus those.
 
+
+### DeepSpeed against FSDP, on the same hardware, at the same global batch
+
+`training/distributed.py` had generators for FSDP, DeepSpeed ZeRO-3 and Ray, all pure
+functions, all tested, none of them ever run. FSDP was implemented and measured first. This
+is the DeepSpeed half, on 2x L40S, with **FSDP re-run on that same pod** so the comparison
+is between strategies rather than between two GPU models.
+
+| GPUs | FSDP ex/s | DeepSpeed ex/s | FSDP peak | DeepSpeed peak |
+|---|---|---|---|---|
+| 1 | 58.63 | **64.25** | 13.25 GiB | **10.96 GiB** |
+| 2 | 106.31 | **114.63** | 11.85 GiB | **10.00 GiB** |
+| Speedup | **1.81** | 1.78 | | |
+| Efficiency | **90.7%** | 89.2% | | |
+
+**DeepSpeed is faster and lighter at both world sizes, and scales very slightly worse.** It
+starts from a better single-GPU number, so its speedup column is smaller while its
+throughput column is larger. Reading only the speedup would say FSDP scales better; reading
+only examples per second would say DeepSpeed wins. Both are true, and neither alone is the
+result.
+
+DeepSpeed's own breakdown shows where the efficiency goes: `bwd_allreduce` is 14.96 ms at
+one GPU and 21.26 ms at two. That growth is ZeRO-3's extra communication crossing PCIe.
+
+> **The confound, which makes this a comparison of defaults rather than of sharding.** The
+> FSDP arm uses torch's `AdamW`, unfused, under `torch.autocast`. The DeepSpeed arm uses
+> the engine's JIT-compiled `fused_adam` with native bf16 and no autocast, because stacking
+> autocast on top would cast twice. `optimizer_step` at **8.9 ms** for 184M parameters is
+> that fused kernel. So this measures two realistic default configurations, which is what
+> people actually run, and it does **not** isolate ZeRO-3 from FSDP. At one GPU, ZeRO-3
+> shards across one device and therefore shards nothing, so the entire single-GPU gap is
+> the optimizer and precision path rather than sharding.
+
+**Interconnect, measured by accident.** The same FSDP code and the same global batch reach
+**98.5%** efficiency at two A100-SXM4 and **90.7%** at two L40S, with identical peak memory
+of 11.85 GiB. A100 SXM has NVLink; L40S does not, so every all-gather crosses PCIe. That
+eight-point gap is the interconnect and nothing else.
+
+Ray remains a config generator. `build_run` refuses it with a reason: Ray Train runs this
+script as a worker rather than wrapping a model, so it does not belong behind that call.
+
+Records: [`reports/experiments/scaling/`](reports/experiments/scaling), filed per device.
+
+### The GPU saturates at 1024 tokens
+
+The same inference sweep, on an L40S:
+
+| Batch (windows) | Median | Windows/s |
+|---|---|---|
+| 1 | 15.16 ms | 65.95 |
+| 2 | 15.31 ms | **130.67** |
+| 4 | 32.19 ms | 124.26 |
+| 8 | 75.34 ms | 106.18 |
+| 16 | 148.0 ms | 108.11 |
+| 32 | 299.1 ms | 106.99 |
+
+**Batch 1 and batch 2 take the same wall time.** Batch 2 is nearly free and doubles
+throughput; past that, time scales linearly with batch and throughput goes flat. The model
+saturates a 48 GB datacenter GPU at **1024 tokens**. A model bound by its matrix multiplies
+would keep gaining to batch 32 and beyond.
+
+**That is the third independent measurement pointing at the same cause.** The profiler
+ranked `aten::scatter_add_` at 20.87% of device time against 4.47% for every GEMM combined.
+The CPU sweep found batching worth 13%. This finds batching worth nothing past batch 2. All
+three are what you would expect from a model bound by **indexing and scatter**, which are
+memory-bandwidth-bound and do not parallelise with batch, and none of them are what you
+would expect from a GEMM-bound model. Three experiments, two devices, one conclusion, and
+it is the conclusion that specifies the Phase 7 kernel.
+
+GPU inference is **105.8 windows/s against 4.84 on CPU**, roughly 22x, and the serving path
+still deploys on CPU because 2.5 windows/s is enough for the traffic it has.
+
+> Two things not published from that run. The batch-1 p95 of 125.94 ms against a 15.16 ms
+> median is CUDA context creation and cuDNN autotune on first call, not a latency tail. And
+> the GPU thread sweep is flat within 0.6% from 1 to 128 host threads, as it must be, since
+> host threads are not the resource doing the work; its efficiency column is arithmetically
+> valid and meaningless, so the artifact records why it is omitted rather than printing
+> 0.008 for someone to misread. The flat GPU curve is the control that makes the CPU thread
+> result a property of the hardware rather than an artifact of the harness.
 
 ### Spark, and why one machine cannot demonstrate its value
 

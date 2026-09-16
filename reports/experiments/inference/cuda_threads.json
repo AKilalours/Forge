@@ -1,0 +1,36 @@
+{
+ "device": "cuda",
+ "device_name": "NVIDIA L40S",
+ "host_cpu_count": 36,
+ "fixed": "peak throughput across the batch sweep, at each host thread count",
+ "why_efficiency_is_omitted": "On CPU, dividing speedup by thread count measures how well the work uses the cores doing it. On GPU the work is on the device and the host thread count is not the resource, so that ratio is arithmetically valid and meaningless. Reporting 0.008 at 128 threads would read as a finding to anyone skimming.",
+ "rows": [
+  {
+   "threads": 1,
+   "windows_per_second": 105.79,
+   "speedup_over_one_thread": 1.0
+  },
+  {
+   "threads": 2,
+   "windows_per_second": 106.34,
+   "speedup_over_one_thread": 1.005
+  },
+  {
+   "threads": 4,
+   "windows_per_second": 106.14,
+   "speedup_over_one_thread": 1.003
+  },
+  {
+   "threads": 8,
+   "windows_per_second": 105.72,
+   "speedup_over_one_thread": 0.999
+  },
+  {
+   "threads": 128,
+   "windows_per_second": 105.96,
+   "speedup_over_one_thread": 1.002
+  }
+ ],
+ "finding": "Flat within 0.6% across 1 to 128 host threads. This is the control for the CPU thread sweep: intra-op threads govern CPU inference and are irrelevant on GPU, which is what makes the CPU result a property of the hardware rather than an artifact of the harness.",
+ "_note": "Transcribed from the pod terminal; the pod had no persistent volume. Every field appeared verbatim in the run's own JSON output."
+}

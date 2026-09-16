@@ -45,6 +45,35 @@ def summary(arm_key: str) -> dict:
     return json.loads((REPORTS / f"indist_{ 'baseline' if arm_key == 'A' else 'mirror' }.json").read_text())
 
 
+
+def _uninstallable_test_gates() -> set[str]:
+    """Import names that test modules refuse to run without and this environment lacks.
+
+    Reuses the same scan as tests/unit/test_dependency_declaration.py: every module-level
+    pytest.importorskip in tests/. If any of those cannot be imported here, the collected
+    count is short and must not be compared against the badge.
+    """
+    import importlib.util
+
+    pattern = re.compile(
+        r"^(?:[A-Za-z_][A-Za-z0-9_]*\s*=\s*)?_?pytest\.importorskip\(\s*['\"]([^'\"]+)['\"]"
+    )
+    names: set[str] = set()
+    for path in sorted((ROOT / "tests").rglob("test_*.py")):
+        for line in path.read_text(encoding="utf-8").splitlines():
+            m = pattern.match(line)
+            if m:
+                names.add(m.group(1).split(".")[0])
+    missing = set()
+    for name in names:
+        try:
+            if importlib.util.find_spec(name) is None:
+                missing.add(name)
+        except (ImportError, ValueError):
+            missing.add(name)
+    return missing
+
+
 def parse_collected_count(text: str) -> int | None:
     """Pull the test count out of `pytest --collect-only` output.
 
@@ -100,6 +129,28 @@ def collected_test_count() -> tuple[int | None, str]:
 
     out = proc.stdout + proc.stderr
     count = parse_collected_count(out)
+
+    # A COUNT FROM AN INCOMPLETE ENVIRONMENT IS ALSO A LIE, and it exits 0.
+    #
+    # Module-level pytest.importorskip makes a whole file contribute zero tests when its
+    # dependency is absent, and pytest reports success. So a machine without torch or
+    # pillow collects a few hundred fewer tests than a developer machine and says nothing
+    # is wrong. This function previously only rejected non-zero exits, so it happily
+    # reported 916 for a 962-test suite on a container missing the optional extras.
+    #
+    # That is the third variation of the same defect in this one function. First it could
+    # not tell "could not launch pytest" from "ran it and could not read the answer". Then
+    # it could not tell "collected everything" from "collected whatever imported" after a
+    # collection error. Now: "collected everything" from "collected everything that was
+    # INSTALLED". Each fix addressed the case in front of it rather than the shape, which
+    # is: a count is only meaningful when the environment that produced it is complete.
+    missing = _uninstallable_test_gates()
+    if missing:
+        return None, (
+            "unavailable: this environment cannot import "
+            f"{', '.join(sorted(missing))}, so the test modules gated on them contribute "
+            "no tests and any count is short by however many they hold"
+        )
 
     # A collection ERROR makes the count a lie rather than a number. pytest still prints
     # "N tests collected" alongside "M errors during collection", and N is only the
@@ -238,7 +289,8 @@ def main(check_test_count: bool = True) -> int:
             bad.append(f"op share {op}: README {cells[0]!r} vs artifact {shares[op]!r}")
 
     # ---- scaling table --------------------------------------------------------
-    scal = {r["world_size"]: r for r in load("scaling/scaling_summary.json")["rows"]}
+    scal = {r["world_size"]: r
+            for r in load("scaling/nvidia-a100-sxm4-80gb/scaling_summary.json")["rows"]}
     sc = table_rows(md, "| GPUs | Examples/s |")
     for row_key, cells in sc.items():
         ws = int(row_key)
@@ -294,6 +346,57 @@ def main(check_test_count: bool = True) -> int:
             "README publishes an inference sweep but reports/experiments/inference/"
             "cpu_latency.json is not committed"
         )
+
+    # ---- strategy comparison and the GPU sweep --------------------------------
+    # Gated in the same commit that publishes them. Publishing first and gating later is
+    # how the evaluation tables went unchecked for months.
+    l40s = REPORTS / "scaling" / "nvidia-l40s"
+    if "| GPUs | FSDP ex/s |" in md:
+        for strat, fname in (("fsdp", "scaling_summary.json"),
+                             ("deepspeed", "scaling_summary_deepspeed.json")):
+            path = l40s / fname
+            if not path.exists():
+                bad.append(f"README publishes the L40S {strat} arm but {fname} is missing")
+                continue
+            rows = {r["world_size"]: r for r in json.loads(path.read_text())["rows"]}
+            table = table_rows(md, "| GPUs | FSDP ex/s |")
+            col = 0 if strat == "fsdp" else 1
+            for ws in (1, 2):
+                published = table[str(ws)][col]
+                if not close(published, float(rows[ws]["examples_per_second"])):
+                    bad.append(f"L40S {strat} ws={ws} ex/s: README {published!r} vs "
+                               f"artifact {rows[ws]['examples_per_second']!r}")
+                peak = table[str(ws)][2 + col].replace(" GiB", "")
+                if not close(peak, float(rows[ws]["peak_memory_gib"])):
+                    bad.append(f"L40S {strat} ws={ws} peak: README {peak!r} vs "
+                               f"artifact {rows[ws]['peak_memory_gib']!r}")
+            for label, row_key, field in [("speedup", "speedup", "speedup"),
+                                          ("efficiency", "efficiency", "scaling_efficiency")]:
+                published = table[row_key][col]
+                stored = rows[2][field]
+                if not close(published, float(stored), percent=(label == "efficiency")):
+                    bad.append(f"L40S {strat} {label}: README {published!r} vs "
+                               f"artifact {stored!r}")
+
+    cuda_path = REPORTS / "inference" / "cuda_latency.json"
+    if "| Batch (windows) | Median | Windows/s |" in md:
+        if not cuda_path.exists():
+            bad.append("README publishes a GPU sweep but cuda_latency.json is missing")
+        else:
+            cu = {r["batch_windows"]: r
+                  for r in json.loads(cuda_path.read_text())["batch_sweep"]}
+            for row_key, cells in table_rows(md, "| Batch (windows) | Median | Windows/s |").items():
+                b = int(row_key)
+                if b not in cu:
+                    bad.append(f"GPU table has batch {b}, the artifact does not")
+                    continue
+                for label, published, stored in [
+                    ("median", cells[0].replace(" ms", ""), cu[b]["median_ms"]),
+                    ("windows/s", cells[1], cu[b]["windows_per_second"]),
+                ]:
+                    if not close(published, float(stored)):
+                        bad.append(f"GPU batch {b} {label}: README {published!r} vs "
+                                   f"artifact {stored!r}")
 
     # ---- thread sweep ---------------------------------------------------------
     th_path = REPORTS / "inference" / "cpu_threads.json"

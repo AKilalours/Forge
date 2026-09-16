@@ -1,0 +1,29 @@
+{
+ "strategy": "deepspeed",
+ "device_name": "NVIDIA L40S",
+ "global_batch_size": 64,
+ "seq_len": 512,
+ "precision": "bf16",
+ "gradient_checkpointing": false,
+ "invariant": "Every world size runs the same global batch; grad_accum absorbs the difference. Efficiency is speedup divided by world size, so 1.0 is linear and never happens.",
+ "rows": [
+  {
+   "world_size": 1,
+   "examples_per_second": 64.255,
+   "tokens_per_second": 32898.7,
+   "seconds_per_step": 0.996,
+   "peak_memory_gib": 10.96,
+   "speedup": 1.0,
+   "scaling_efficiency": 1.0
+  },
+  {
+   "world_size": 2,
+   "examples_per_second": 114.626,
+   "tokens_per_second": 58688.4,
+   "seconds_per_step": 0.5583,
+   "peak_memory_gib": 10.0,
+   "speedup": 1.784,
+   "scaling_efficiency": 0.892
+  }
+ ]
+}

@@ -1,0 +1,69 @@
+{
+ "device": "cuda",
+ "device_name": "NVIDIA L40S",
+ "backbone": "microsoft/deberta-v3-base",
+ "seq_len": 512,
+ "precision": "float32",
+ "torch_threads": 64,
+ "scope": "Model forward over pre-tokenised windows only. Tokenisation, windowing and HTTP overhead are NOT included, so a real request costs this plus those.",
+ "batch_sweep": [
+  {
+   "batch_windows": 1,
+   "median_ms": 15.16,
+   "p95_ms": 125.94,
+   "windows_per_second": 65.95,
+   "ms_per_window": 15.16,
+   "samples": 7
+  },
+  {
+   "batch_windows": 2,
+   "median_ms": 15.31,
+   "p95_ms": 15.57,
+   "windows_per_second": 130.67,
+   "ms_per_window": 7.65,
+   "samples": 7
+  },
+  {
+   "batch_windows": 4,
+   "median_ms": 32.19,
+   "p95_ms": 32.55,
+   "windows_per_second": 124.26,
+   "ms_per_window": 8.05,
+   "samples": 7
+  },
+  {
+   "batch_windows": 8,
+   "median_ms": 75.34,
+   "p95_ms": 75.66,
+   "windows_per_second": 106.18,
+   "ms_per_window": 9.42,
+   "samples": 7
+  },
+  {
+   "batch_windows": 16,
+   "median_ms": 148.0,
+   "p95_ms": 148.44,
+   "windows_per_second": 108.11,
+   "ms_per_window": 9.25,
+   "samples": 7
+  },
+  {
+   "batch_windows": 32,
+   "median_ms": 299.1,
+   "p95_ms": 299.27,
+   "windows_per_second": 106.99,
+   "ms_per_window": 9.35,
+   "samples": 7
+  }
+ ],
+ "peak_throughput": {
+  "batch_windows": 2,
+  "windows_per_second": 130.67,
+  "speedup_over_batch_1": 1.98
+ },
+ "caveats": {
+  "batch_1_p95": "125.94 ms against a 15.16 ms median is the CUDA context and cuDNN autotune on first call, not a latency tail. Do not publish it.",
+  "saturation": "Batch 1 and batch 2 take the same wall time, so batch 2 is nearly free. Past that, time scales linearly with batch and throughput is flat. The model saturates this GPU at 1024 tokens, which a GEMM-bound model would not."
+ },
+ "_note": "Transcribed from the pod terminal; the pod had no persistent volume. Every field appeared verbatim in the run's own JSON output."
+}

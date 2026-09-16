@@ -1,0 +1,18 @@
+{
+ "world_size": 2,
+ "strategy": "deepspeed",
+ "per_device_batch": 16,
+ "grad_accum": 2,
+ "global_batch_size": 64,
+ "seq_len": 512,
+ "precision": "bf16",
+ "gradient_checkpointing": false,
+ "steps": 12,
+ "wall_seconds": 6.7,
+ "examples_per_second": 114.626,
+ "tokens_per_second": 58688.4,
+ "seconds_per_step": 0.5583,
+ "peak_memory_gib": 10.0,
+ "device_name": "NVIDIA L40S",
+ "_note": "Transcribed from the pod terminal. The pod had no persistent volume, so these records were read off the session rather than copied from disk. Every field here appeared verbatim in the run's own JSON output."
+}
