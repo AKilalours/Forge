@@ -118,7 +118,6 @@ def main() -> int:
     parser.add_argument("--all", action="store_true", help="probe every candidate in turn")
     args = parser.parse_args()
 
-    from forge.image.detector import CANDIDATES
 
     if args.all:
         return _probe_all(args)

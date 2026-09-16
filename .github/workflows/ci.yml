@@ -23,7 +23,9 @@ jobs:
       # With only [dev], fastapi is absent, the module skips itself, and CI goes
       # green on a file that never executed.
       - run: pip install -e ".[dev,serve]"
-      - run: ruff check src tests
+      # scripts/ is in scope because it is not scratch: eval_ood.py produced the
+      # published benchmark numbers and check_readme_claims.py is a gate below.
+      - run: ruff check src tests scripts
       - run: pytest --cov=forge --cov-report=term-missing
       # Published numbers must still match the artifacts that produced them.
       - run: python scripts/check_readme_claims.py

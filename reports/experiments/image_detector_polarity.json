@@ -1,29 +1,34 @@
 {
-  "model_id": "umm-maybe/AI-image-detector",
-  "labels": [
-    "artificial",
-    "human"
-  ],
-  "name_based_ai_index": 0,
-  "verified_ai_index": 0,
-  "inverted_relative_to_labels": false,
-  "n": {
-    "ai": 20,
-    "human": 9
-  },
-  "mean_probability_as_scored": {
-    "ai": 0.401238,
-    "human": 0.089361
-  },
-  "median_probability_as_scored": {
-    "ai": 0.436605,
-    "human": 0.070474
-  },
-  "separation": 0.311877,
-  "median_separation": 0.366131,
-  "threshold_ai": 0.312469,
-  "human_ceiling": 0.117061,
-  "ai_recall_at_threshold": 0.55,
-  "operating_point_is_in_sample": true,
-  "method": "Group medians and means over labelled directories, scored with the name-based mapping. Both must separate: a mean gap without a median gap means a bimodal detector whose average is carried by a few confident hits. If the known-AI group scores LOWER, the mapping is inverted and the verified index is the other class. The threshold is placed above every human image in the probe set, so it is fitted in sample and its recall is optimistic. Measured, never adjusted to make a result look better."
+ "model_id": "umm-maybe/AI-image-detector",
+ "labels": [
+  "artificial",
+  "human"
+ ],
+ "name_based_ai_index": 0,
+ "verified_ai_index": 0,
+ "inverted_relative_to_labels": false,
+ "n": {
+  "ai": 20,
+  "human": 9
+ },
+ "mean_probability_as_scored": {
+  "ai": 0.401238,
+  "human": 0.089361
+ },
+ "median_probability_as_scored": {
+  "ai": 0.436605,
+  "human": 0.070474
+ },
+ "separation": 0.311877,
+ "median_separation": 0.366131,
+ "threshold_ai": 0.312469,
+ "human_ceiling": 0.117061,
+ "ai_recall_at_threshold": 0.55,
+ "operating_point_is_in_sample": true,
+ "method": "Group medians and means over labelled directories, scored with the name-based mapping. Both must separate: a mean gap without a median gap means a bimodal detector whose average is carried by a few confident hits. If the known-AI group scores LOWER, the mapping is inverted and the verified index is the other class. The threshold is placed above every human image in the probe set, so it is fitted in sample and its recall is optimistic. Measured, never adjusted to make a result look better.",
+ "reproducibility": {
+  "source_images_retained": false,
+  "supersede_with": "scripts/image_detector_probe.py --ai <dir> --human <dir>",
+  "note": "The probe set lived in /tmp and was lost to a reboot before this script recorded provenance. Every number here was measured rather than estimated, and the direction it establishes (index 0 = artificial) separated cleanly on both mean and median. But the measurement CANNOT be regenerated from this repository, and the threshold is fitted in sample on 9 human images, so its recall of 0.55 is optimistic and its 'zero false positives' is a statement about 9 photographs. This block exists so the record declares its own weakness rather than leaving a reader to infer it. Replace, do not patch: re-run the probe on a set whose file list lands in measured_on."
+ }
 }

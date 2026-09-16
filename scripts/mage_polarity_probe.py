@@ -93,7 +93,7 @@ def main() -> int:
     for label, fraction in sorted(generated_by_label.items()):
         print(f"    label={label}: {fraction:.1%}")
 
-    decided = [l for l, f in generated_by_label.items() if f > 0.9]
+    decided = [lab for lab, f in generated_by_label.items() if f > 0.9]
     if len(decided) == 1:
         print(
             f"\nCONCLUSION: label={decided[0]} is MACHINE-generated. "

@@ -375,7 +375,18 @@ def test_the_polarity_record_says_what_it_was_measured_on():
     record = json.loads(path.read_text(encoding="utf-8"))
     measured = record.get("measured_on")
     if measured is None:
-        pytest.skip("record predates provenance; re-run scripts/image_detector_probe.py")
+        # No provenance is only acceptable when the record SAYS it has none. A skip here
+        # was indefinite: the source set is gone, so re-running cannot fix this record and
+        # the skip would have recurred on every run forever, which is how a known gap
+        # turns back into an invisible one.
+        repro = record.get("reproducibility")
+        assert repro is not None, (
+            "a record without measured_on must declare a reproducibility block saying so"
+        )
+        assert repro.get("source_images_retained") is False
+        assert repro.get("note"), "the declaration must say what was lost and why"
+        assert repro.get("supersede_with"), "and how to replace it"
+        return
 
     for field in ("ai_dir", "human_dir", "ai_files", "human_files", "measured_at"):
         assert measured.get(field), f"{field} missing from the record's provenance"

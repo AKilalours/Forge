@@ -32,7 +32,6 @@ import argparse
 import hashlib
 import json
 import pathlib
-import sys
 import time
 
 import numpy as np
@@ -111,7 +110,7 @@ def score_documents(model, tokenizer, docs: list[BenchmarkDoc], mcfg: dict, devi
 
     # Windows come back in the order build_dataset produced them; group by document.
     by_doc: dict[str, list[float]] = {}
-    for feature, probability in zip(feats, probs):
+    for feature, probability in zip(feats, probs, strict=True):
         by_doc.setdefault(feature["doc_id"], []).append(probability)
 
     label_of = {e.doc_id: e.label for e in examples}
