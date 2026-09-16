@@ -31,6 +31,7 @@ import time
 from pathlib import Path
 
 OUT = Path("reports/experiments/inference")
+ROOT_DIR = Path(__file__).resolve().parents[1]
 SEQ_LEN = 512               # configs/models/forge_base.yaml, and the serving window
 BACKBONE = "microsoft/deberta-v3-base"
 BATCH_SIZES = (1, 2, 4, 8, 16, 32)
@@ -51,10 +52,19 @@ def _percentile(values: list[float], q: float) -> float:
     return ordered[idx]
 
 
-def measure(device: str, repeats: int) -> dict:
+def measure(device: str, repeats: int, threads: int | None = None) -> dict:
     import torch
 
     from forge.modeling.encoder import ForgeConfig, build_model
+
+    # THREADS ARE THE LEVER ON THIS PATH, not batch size. The first version of this script
+    # left torch at its default and recorded torch_threads=4 on a 10-core machine. The
+    # Spark sweep later confirmed what that caveat suspected: giving the same work all ten
+    # cores raised throughput 51%. Every latency figure measured at the default was
+    # understated, so the thread count is now chosen explicitly and recorded, rather than
+    # inherited from whatever torch decided.
+    if threads is not None:
+        torch.set_num_threads(max(1, threads))
 
     torch.manual_seed(42)
     model = build_model(ForgeConfig(backbone=BACKBONE, max_length=SEQ_LEN))
@@ -162,11 +172,79 @@ def measure(device: str, repeats: int) -> dict:
     return result
 
 
+def thread_sweep(device: str, repeats: int) -> dict:
+    """Throughput against intra-op thread count, at the batch size the server uses.
+
+    The batch sweep answered "does batching help" with no. This answers "what does help",
+    and it is the question the earlier caveat left open rather than closed. Run in one
+    process per thread count, because torch.set_num_threads inside a live process does not
+    reliably resize a pool that has already been used.
+    """
+    import os
+    import subprocess
+    import sys
+
+    counts = sorted({1, 2, 4, 8, os.cpu_count() or 1})
+    counts = [c for c in counts if c <= (os.cpu_count() or 1)]
+    rows = []
+    print(f"{'threads':>8} {'median ms':>10} {'win/s':>9} {'speedup':>9}", flush=True)
+    for n in counts:
+        proc = subprocess.run(
+            [sys.executable, __file__, "--device", device, "--threads", str(n),
+             "--repeats", str(repeats)],
+            capture_output=True, text=True, cwd=ROOT_DIR,
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(f"thread={n} run failed:\n{proc.stdout[-2000:]}\n{proc.stderr[-2000:]}")
+        data = json.loads((OUT / f"{device}_latency.json").read_text())
+        peak = data["peak_throughput"]
+        rows.append({
+            "threads": data["torch_threads"],
+            "requested_threads": n,
+            "peak_batch": peak["batch_windows"],
+            "windows_per_second": peak["windows_per_second"],
+        })
+        base = rows[0]["windows_per_second"]
+        print(f"{n:>8} {'':>10} {rows[-1]['windows_per_second']:>9.2f} "
+              f"{rows[-1]['windows_per_second'] / base:>9.2f}", flush=True)
+
+    base = rows[0]["windows_per_second"]
+    for r in rows:
+        r["speedup_over_one_thread"] = round(r["windows_per_second"] / base, 3)
+        r["efficiency"] = round(r["windows_per_second"] / base / r["requested_threads"], 3)
+
+    out = {
+        "device": device,
+        "host_cpu_count": os.cpu_count(),
+        "fixed": "peak throughput across the batch sweep, at each thread count",
+        "note": (
+            "One process per thread count. torch.set_num_threads does not reliably resize "
+            "a thread pool that has already run work, so measuring several counts inside "
+            "one process silently reports the first one several times."
+        ),
+        "rows": rows,
+    }
+    OUT.mkdir(parents=True, exist_ok=True)
+    path = OUT / f"{device}_threads.json"
+    path.write_text(json.dumps(out, indent=1) + "\n")
+    print(f"wrote {path}")
+    return out
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--device", default="cpu", choices=("cpu", "cuda"))
+    ap.add_argument("--threads", type=int, default=None,
+                    help="intra-op threads. Default leaves torch's own choice, which on a "
+                         "10-core Mac is 4 and understates every figure by about a third.")
+    ap.add_argument("--thread-sweep", action="store_true",
+                    help="scan thread count at a fixed batch size. On CPU this is the "
+                         "dimension that actually moves throughput.")
     ap.add_argument("--repeats", type=int, default=7,
                     help="samples per point. 7 is enough for a median and a nearest-rank "
                          "p95 without pretending to more precision than that supports.")
     a = ap.parse_args()
-    measure(a.device, a.repeats)
+    if a.thread_sweep:
+        thread_sweep(a.device, a.repeats)
+    else:
+        measure(a.device, a.repeats, a.threads)
