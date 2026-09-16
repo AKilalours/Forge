@@ -35,6 +35,9 @@ fmt:              ## Auto-format
 test:             ## Run the test suite
 	$(PY) -m pytest
 
+claims:           ## Check every published README number against its artifact
+	$(PY) scripts/check_readme_claims.py
+
 spec:             ## Validate that configs match the frozen Data Spec v1
 	$(PY) -m forge.cli spec-check
 

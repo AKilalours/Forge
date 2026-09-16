@@ -20,6 +20,8 @@ jobs:
       - run: pip install -e ".[dev,serve]"
       - run: ruff check src tests
       - run: pytest --cov=forge --cov-report=term-missing
+      # Published numbers must still match the artifacts that produced them.
+      - run: python scripts/check_readme_claims.py
 
   spec-check:
     runs-on: ubuntu-latest
