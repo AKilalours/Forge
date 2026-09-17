@@ -13,17 +13,24 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Tests-976%20passing-00C853?style=for-the-badge"/>
+  <img src="https://img.shields.io/badge/Tests-985%20passing-00C853?style=for-the-badge"/>
   <img src="https://img.shields.io/badge/In--distribution%20AUROC-0.99997-00C853?style=for-the-badge"/>
   <img src="https://img.shields.io/badge/FPR%20budget-0.1%25-0056D2?style=for-the-badge"/>
   <img src="https://img.shields.io/badge/Headline-Partial%20null%20result-FF8F00?style=for-the-badge"/>
 </p>
 
 <p align="center">
-  <a href="https://panagramforge-cqzwwskdjhbfv6hxwppvkz.streamlit.app"><b>▶ Live demo</b></a> ·
   <a href="docs/evaluation.md"><b>Evaluation</b></a> ·
   <a href="docs/writeup.md"><b>Writeup</b></a> ·
-  <a href="docs/model_card.md"><b>Model card</b></a>
+  <a href="docs/model_card.md"><b>Model card</b></a> ·
+  <a href="docs/jd_coverage.md"><b>What is and is not implemented</b></a>
+</p>
+
+<p align="center">
+  <a href="https://panagramforge-cqzwwskdjhbfv6hxwppvkz.streamlit.app"><b>▶ Live demo</b></a>
+  <br/>
+  <sub><i>Streamlit Community Cloud sleeps when idle. First load takes about two minutes
+  while the container wakes and the checkpoint downloads. The evidence above does not.</i></sub>
 </p>
 
 <br/>
@@ -258,6 +265,44 @@ well under 10x, and they were measured for different reasons on different code.
 **Scope.** This times the model forward over pre-tokenised windows. Tokenisation,
 windowing and HTTP are not included, so a real request costs this plus those.
 
+
+### Ray Train, and what a single machine can honestly prove about it
+
+Ray Train is not a third sharding strategy to put beside FSDP and DeepSpeed. Its job is to
+**start and supervise** a distributed job: place the workers, build the process group, hand
+each one its rank, tear everything down when one dies. It replaces `torchrun`, not FSDP. So
+benchmarking it against the other two would be a category error, and a throughput table
+with Ray in it would mislead.
+
+`scripts/ray_train_launch.py` runs the same gradient-accumulation step under
+`ray.train.torch.TorchTrainer`. On this machine, 2 workers, CPU, gloo:
+
+```
+world_rank=0, local_rank=0, node_rank=0   |   world_rank=1, local_rank=1, node_rank=0
+backend: gloo        global_batch_size: 64        grad_accum: 2
+```
+
+**What that shows:** `ray_scaling_config`, which had been unit-tested for months and never
+handed to Ray, produces output `TorchTrainer` accepts; the workers got distinct ranks in a
+shared process group; and the global batch came back as **64**, the same value `torchrun`
+produces. Changing who starts the workers did not change what they train on.
+
+**What it does not show:** anything about throughput. CPU, gloo, one machine, a two-layer
+toy model at sequence length 128. Ray earns its place on multiple machines, which this has
+never run on.
+
+> **The artifact this replaced was a fabrication, and the fix is the interesting part.**
+> The first version wrote its "Ray placed the workers and built the process group" sentence
+> as a hardcoded string, and filled the supporting fields with `metrics.get(...)`. Ray 2.58
+> is Train V2, where `Result.metrics` does not exist, so every field came back `null` and
+> the script wrote a confident claim backed by nothing and exited 0. The claim and the
+> evidence were produced independently and nothing checked that the second supported the
+> first. Now the evidence is validated before the sentence is written, the sentence is
+> interpolated from those same verified fields, and
+> [`tests/unit/test_ray_launch_evidence.py`](tests/unit/test_ray_launch_evidence.py)
+> refuses any committed Ray artifact whose fields are null. Every other finding in this
+> repository was a mechanism that never ran; this one ran, produced nothing, and reported
+> success.
 
 ### The flywheel, as a DAG
 

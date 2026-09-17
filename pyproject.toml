@@ -59,7 +59,14 @@ mining = [
 ]
 # Phase 7: distributed training
 dist = [
-  "ray[default,train]>=2.10",
+  # UPPER BOUND, and a floor that means something. ray[train]>=2.10 resolved to 2.58, which
+  # is Ray Train V2: Result.metrics no longer exists and the value that reaches the driver
+  # is the train loop's RETURN value via result.return_value. Code written against V1 reads
+  # None for every field and does not raise. That is the third unbounded pin to bite this
+  # project in two days, after ruff>=0.4 hiding 109 errors and apache-airflow>=2.9
+  # installing a major version the DAG was not written for. 2.58 is what this was verified
+  # against.
+  "ray[default,train]>=2.58,<3",
   "deepspeed>=0.14",
 ]
 # Phase 8: serving, monitoring, orchestration

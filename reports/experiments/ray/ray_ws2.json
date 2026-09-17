@@ -1,0 +1,23 @@
+{
+ "launcher": "ray.train.torch.TorchTrainer",
+ "workers": 2,
+ "use_gpu": false,
+ "backend": "gloo",
+ "global_batch_size": 64,
+ "grad_accum": 2,
+ "per_device_batch": 16,
+ "steps": 5,
+ "wall_seconds": 0.702,
+ "host": "arm (Darwin)",
+ "scaling_config": {
+  "num_workers": 2,
+  "use_gpu": false,
+  "resources_per_worker": {
+   "GPU": 0,
+   "CPU": 4
+  },
+  "placement_strategy": "PACK"
+ },
+ "what_this_shows": "Ray Train placed 2 workers and built a gloo process group; ray_scaling_config's output was accepted by TorchTrainer; and the global batch came back as 64, the same value torchrun produces, so changing the launcher did not change what is trained.",
+ "what_this_does_not_show": "Anything about throughput. This is CPU, gloo, one machine, and a two-layer toy model with seq_len 128. Ray earns its place on multiple machines, which this has never run on. Do not read wall_seconds as a performance result."
+}

@@ -37,3 +37,7 @@ demo/
 # Chrome traces are tens of MB and need a viewer. The ranked summary beside each
 # one is the committed artifact.
 reports/experiments/profile/*_trace.json
+
+# Ray Train writes per-run controller state and logs under the storage path. The evidence
+# is reports/experiments/ray/ray_ws*.json; the framework's own bookkeeping is not.
+reports/experiments/ray/ray_results/
