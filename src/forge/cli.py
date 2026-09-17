@@ -155,6 +155,11 @@ def mirror(
     out: str = typer.Option("data/silver/mirrors", "--out"),
     backend: str = typer.Option("fake", "--backend", help="fake | vllm | transformers"),
     limit: int = typer.Option(None, "--limit", help="cap human documents (smoke runs)"),
+    only_family: str = typer.Option(
+        None, "--only-family",
+        help="mirror just this held-in family's share; the other families' documents are "
+             "assigned as usual and left for another invocation",
+    ),
 ) -> None:
     """Phase 2: generate synthetic mirrors."""
     from forge.generation.run import run as _run
@@ -164,7 +169,8 @@ def mirror(
             "backend=fake: output is a pipeline test, NOT training data.",
             fg=typer.colors.YELLOW,
         )
-    result = _run(config, humans_root=humans, out_root=out, backend=backend, limit=limit)
+    result = _run(config, humans_root=humans, out_root=out, backend=backend, limit=limit,
+                  only_family=only_family)
     typer.secho(f"generated {len(result.docs)} mirrors", fg=typer.colors.GREEN)
     for k, v in result.stats.items():
         typer.echo(f"  {k}: {v}")

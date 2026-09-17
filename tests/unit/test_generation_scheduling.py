@@ -208,3 +208,44 @@ def test_split_and_group_are_still_inherited(recorder: type[_Recorder]) -> None:
         h = by_id[d.source_human_id]
         assert d.split is h.split
         assert d.source_group_id == h.source_group_id
+
+
+# ---------------------------------------- one family per invocation, for a 30 GB disk
+
+def test_mirror_family_runs_reconstruct_the_single_run():
+    """Same invariant the control arm holds, for the same reason and the same disk.
+
+    The pod has 30 GB and no volume, four families are about 23 GB of weights, so the
+    mirror run is split one family at a time with the weights deleted in between. That is
+    only sound if the pieces add up to the unsplit run, which they do because the filter
+    is applied after assignment and never to the roster.
+    """
+    humans = _humans(40)
+    whole = generate_mirrors(humans, ROSTER, MIRROR_CFG, backend="fake")
+    names = sorted(f["family"] for f in ROSTER["families"])
+    pieces = [
+        d
+        for fam in names
+        for d in generate_mirrors(humans, ROSTER, MIRROR_CFG, backend="fake",
+                                  only_family=fam).docs
+    ]
+    assert sorted(d.sample_id for d in pieces) == sorted(d.sample_id for d in whole.docs)
+    by_id = {d.sample_id: d for d in pieces}
+    for d in whole.docs:
+        assert by_id[d.sample_id].generator.family == d.generator.family
+        assert by_id[d.sample_id].text == d.text
+
+
+def test_a_filtered_mirror_run_is_a_share_not_the_whole_corpus():
+    """Filtering the roster instead would have given one model every document."""
+    humans = _humans(40)
+    whole = generate_mirrors(humans, ROSTER, MIRROR_CFG, backend="fake")
+    part = generate_mirrors(humans, ROSTER, MIRROR_CFG, backend="fake", only_family="alpha")
+    assert 0 < len(part.docs) < len(whole.docs)
+    assert {d.generator.family for d in part.docs} == {"alpha"}
+
+
+def test_an_unknown_mirror_family_is_refused():
+    """A typo must not write an empty part and exit 0."""
+    with pytest.raises(ValueError, match="not a held-in family"):
+        generate_mirrors(_humans(5), ROSTER, MIRROR_CFG, backend="fake", only_family="nope")

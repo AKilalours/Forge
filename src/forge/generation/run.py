@@ -128,6 +128,7 @@ def generate_mirrors(
     generators_cfg: dict,
     mirror_cfg: dict,
     backend: str = "fake",
+    only_family: str | None = None,
 ) -> MirrorResult:
     roster = parse_roster(generators_cfg)
     families = held_in_families(roster)
@@ -175,6 +176,24 @@ def generate_mirrors(
     by_family: dict[str, list[_Work]] = {}
     for w in work:
         by_family.setdefault(w.spec.family, []).append(w)
+
+    # ONE FAMILY PER INVOCATION. Same constraint and same rule as the control arm: the
+    # pod has 30 GB and no volume, four families are about 23 GB of weights, so the run
+    # is split and each family's weights are deleted before the next.
+    #
+    # Applied AFTER assignment, never to the roster. assign_family hashes each document
+    # against the family LIST, so filtering earlier would hand every human document to
+    # the surviving model and produce a one-family mirror set that reports itself as
+    # four. Assigning against all four and running one family's share means the pieces
+    # add up to what the unsplit run would have written.
+    if only_family is not None:
+        known = {f.family for f in families}
+        if only_family not in known:
+            raise ValueError(
+                f"{only_family!r} is not a held-in family in this roster. "
+                f"Held-in families are {sorted(known)}."
+            )
+        by_family = {only_family: by_family.get(only_family, [])}
 
     # PASS 2. One family at a time, in large batches, releasing before the next.
     #
@@ -420,10 +439,14 @@ def resolve_generators_config(mirror_cfg: dict) -> str:
     return named
 
 
-def run(config_path: str, humans_root: str | Path, out_root: str | Path, backend: str = "fake", limit: int | None = None) -> MirrorResult:
+def run(config_path: str, humans_root: str | Path, out_root: str | Path, backend: str = "fake",
+        limit: int | None = None, only_family: str | None = None) -> MirrorResult:
     mirror_cfg = load(config_path)
     generators_cfg = load(resolve_generators_config(mirror_cfg))
     humans = read_humans(humans_root, limit=limit)
-    result = generate_mirrors(humans, generators_cfg, mirror_cfg, backend=backend)
-    result.partitions = write_mirrors(result.docs, out_root)
+    result = generate_mirrors(humans, generators_cfg, mirror_cfg, backend=backend,
+                              only_family=only_family)
+    # The part name carries the family so sequential one-family runs accumulate under one
+    # root instead of each overwriting the last.
+    result.partitions = write_mirrors(result.docs, out_root, part=only_family or "000")
     return result
