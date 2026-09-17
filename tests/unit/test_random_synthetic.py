@@ -106,3 +106,88 @@ def test_length_pool_is_read_from_the_real_corpus(tmp_path):
 def test_empty_length_pool_is_refused():
     with pytest.raises(ValueError):
         generate_random(5, [], _cfg(), backend="fake")
+
+
+# ------------------------------------------- generating one family at a time, on a small disk
+
+def _held_in_names():
+    from forge.generation.assignment import held_in_families
+    return sorted(f.family for f in held_in_families(parse_roster(_cfg())))
+
+
+def test_four_one_family_runs_reconstruct_the_single_run_exactly():
+    """The invariant that makes splitting the run safe rather than merely convenient.
+
+    A pod with 30 GB of disk cannot hold four generator families at once, so the corpus
+    has to be built one model at a time. That is only sound if the pieces add up to what
+    one run would have produced. They do, because the family filter is applied AFTER
+    assignment: every document is still assigned against the full roster, and each
+    invocation generates its family's share rather than being handed the whole corpus.
+
+    Filtering the roster before assignment would also have "worked", in the sense that it
+    produced documents and no error, and it would have given the first model every
+    document and called the result a four-family corpus.
+    """
+    whole = generate_random(60, POOL, _cfg(), backend="fake")
+    pieces = [
+        d
+        for fam in _held_in_names()
+        for d in generate_random(60, POOL, _cfg(), backend="fake", only_family=fam).docs
+    ]
+    by_id = {d.sample_id: d for d in pieces}
+    assert len(by_id) == len(pieces), "two families claimed the same document"
+    assert sorted(by_id) == sorted(d.sample_id for d in whole.docs)
+    for d in whole.docs:
+        same = by_id[d.sample_id]
+        assert same.text == d.text
+        assert same.generator.family == d.generator.family
+        assert same.generator.seed == d.generator.seed
+        assert same.split == d.split
+
+
+def test_a_filtered_run_returns_only_that_family():
+    fam = _held_in_names()[0]
+    res = generate_random(60, POOL, _cfg(), backend="fake", only_family=fam)
+    assert res.docs, "the filter produced nothing at all"
+    assert {d.generator.family for d in res.docs} == {fam}
+    assert res.stats["families_used"] == [fam]
+
+
+def test_a_filtered_run_is_a_share_and_not_the_whole_corpus():
+    """The failure this would have had if the filter were applied before assignment."""
+    fam = _held_in_names()[0]
+    whole = generate_random(60, POOL, _cfg(), backend="fake")
+    part = generate_random(60, POOL, _cfg(), backend="fake", only_family=fam)
+    assert 0 < len(part.docs) < len(whole.docs)
+
+
+def test_an_unknown_family_is_refused_rather_than_silently_generating_nothing():
+    """A typo in --only-family must not produce an empty parquet part and exit 0."""
+    with pytest.raises(ValueError, match="not a held-in family"):
+        generate_random(10, POOL, _cfg(), backend="fake", only_family="qwen2.5")
+
+
+def test_a_held_out_family_cannot_be_selected_by_name():
+    """--only-family is not a back door around the held-out rule."""
+    held_out = sorted(f.family for f in held_out_families(parse_roster(_cfg())))
+    with pytest.raises(ValueError, match="not a held-in family"):
+        generate_random(10, POOL, _cfg(), backend="fake", only_family=held_out[0])
+
+
+def test_parts_accumulate_instead_of_overwriting_each_other(tmp_path):
+    """write_mirrors wrote part-000.parquet unconditionally, which is fine exactly once."""
+    from forge.generation.run import write_mirrors
+
+    total = 0
+    for fam in _held_in_names():
+        res = generate_random(60, POOL, _cfg(), backend="fake", only_family=fam)
+        write_mirrors(res.docs, tmp_path, part=fam)
+        total += len(res.docs)
+    on_disk = sorted(tmp_path.glob("split=*/*.parquet"))
+    named = {f.stem for f in on_disk}
+    for fam in _held_in_names():
+        assert f"part-{fam}" in named, f"{fam}'s part is not on disk"
+
+    import pyarrow.parquet as pq
+    rows = sum(pq.read_table(f).num_rows for f in on_disk)
+    assert rows == total, "a later family overwrote an earlier one"

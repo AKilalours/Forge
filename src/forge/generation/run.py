@@ -317,7 +317,17 @@ def _assert_split_inheritance(humans: list[HumanRef], mirrors: list[SyntheticDoc
             )
 
 
-def write_mirrors(docs: list[SyntheticDocument], root: str | Path) -> dict[str, int]:
+def write_mirrors(docs: list[SyntheticDocument], root: str | Path,
+                  part: str = "000") -> dict[str, int]:
+    """Write one parquet part per split.
+
+    `part` NAMES THE FILE so that several invocations accumulate instead of overwriting.
+    It defaulted to a single hardcoded "000", which is correct for one run and silently
+    destructive for two: generating a corpus one family at a time, as a small disk
+    forces, would have left only the last family on disk under a filename that looked
+    like the whole thing. Readers glob `split=*/*.parquet`, so extra parts are free.
+    """
+
     root = Path(root)
     written: dict[str, int] = {}
     groups: dict[str, list[dict]] = {}
@@ -328,7 +338,8 @@ def write_mirrors(docs: list[SyntheticDocument], root: str | Path) -> dict[str, 
     for split, rows in groups.items():
         out = root / f"split={split}"
         out.mkdir(parents=True, exist_ok=True)
-        pq.write_table(pa.Table.from_pylist(rows), out / "part-000.parquet", compression="zstd")
+        pq.write_table(pa.Table.from_pylist(rows), out / f"part-{part}.parquet",
+                       compression="zstd")
         written[split] = len(rows)
     return written
 

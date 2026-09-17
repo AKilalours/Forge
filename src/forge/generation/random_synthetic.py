@@ -122,6 +122,7 @@ def generate_random(
     length_ratio_min: float = 0.5,
     length_ratio_max: float = 2.0,
     max_retries: int = 2,
+    only_family: str | None = None,
 ) -> RandomResult:
     from forge.generation.mirror import _PREAMBLE
     from forge.generation.run import GENERATION_BATCH, batch_generate, build_generator, release
@@ -154,6 +155,29 @@ def generate_random(
     by_family: dict[str, list[tuple[int, object, object, Decoding]]] = {}
     for item in prepared:
         by_family.setdefault(item[2].family, []).append(item)
+
+    # ONE FAMILY PER INVOCATION, WITHOUT CHANGING WHICH DOCUMENTS IT GETS.
+    #
+    # The pod this was written for has 30 GB of disk and no volume. Four generator
+    # families at 1.7B to 3.8B is about 23 GB of weights, and torch plus vLLM is another
+    # 12 to 15 GB, so the run dies partway through the third model. Splitting it means
+    # generating one family, deleting its weights, and starting the next.
+    #
+    # THE FILTER IS APPLIED HERE AND NOT TO `families` ABOVE, and the difference is the
+    # whole point. assign_family hashes each document key against the family LIST, so
+    # filtering the roster first would hand every document to the surviving model and
+    # produce a different corpus from the unsplit run. Assigning against all four and
+    # then running one family's share means four invocations reconstruct exactly what one
+    # invocation would have written. There is a test that runs it both ways and compares.
+    if only_family is not None:
+        known = {f.family for f in families}
+        if only_family not in known:
+            raise ValueError(
+                f"{only_family!r} is not a held-in family in this roster. "
+                f"Held-in families are {sorted(known)}."
+            )
+        by_family = {only_family: by_family.get(only_family, [])}
+        used = {only_family} if by_family[only_family] else set()
 
     # PASS 2: one family at a time, batched, released before the next.
     accepted: dict[int, tuple[str, Decoding]] = {}

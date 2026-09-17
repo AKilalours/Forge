@@ -179,6 +179,11 @@ def generate_random_cmd(
     generators: str = typer.Option("configs/generation/generators_minimal.yaml", "--generators"),
     out: str = typer.Option("data/silver/random", "--out"),
     backend: str = typer.Option("fake", "--backend", help="fake | vllm | transformers"),
+    only_family: str = typer.Option(
+        None, "--only-family",
+        help="generate just this held-in family's share of --n; the other families' "
+             "documents are assigned as usual and left for another invocation",
+    ),
 ) -> None:
     """Arm A: conventional random synthetic data. The control the project measures against.
 
@@ -193,8 +198,12 @@ def generate_random_cmd(
         typer.secho("backend=fake: output is a pipeline test, NOT training data.",
                     fg=typer.colors.YELLOW)
     pool = length_pool_from_corpus(humans)
-    res = generate_random(n, pool, cfg.load(generators), backend=backend)
-    parts = write_mirrors(res.docs, out)
+    res = generate_random(n, pool, cfg.load(generators), backend=backend,
+                          only_family=only_family)
+    # THE PART NAME CARRIES THE FAMILY so four one-family runs accumulate under one root
+    # rather than each overwriting the last. --n stays the FULL corpus size in every one
+    # of them: it is what documents are assigned against, not what this call produces.
+    parts = write_mirrors(res.docs, out, part=only_family or "000")
     typer.secho(f"generated {len(res.docs)} random-synthetic documents", fg=typer.colors.GREEN)
     for k, v in res.stats.items():
         typer.echo(f"  {k}: {v}")
