@@ -81,3 +81,56 @@ def test_training_refuses_a_config_with_no_declared_arm(tmp_path):
     }
     with pytest.raises(RuntimeError, match="must declare data.arm"):
         run(cfg, smoke=True)
+
+
+# ------------------------- the guard that was pinned to a version string that then moved
+
+def test_the_arm_guard_accepts_any_version_of_its_own_prompt_family():
+    """It was a map to the literal "random_v1", and the prompt moved to v2.
+
+    Correcting the prompts to ask for words rather than tokens made them v2, which
+    data_spec_v1 requires, and the next training run died with "config declares arm
+    'random' but data/silver/random contains ['random_v2']". The guard was right that
+    something had changed and wrong about what: the data was correct and the guard was
+    stale. Bumping the literal to v2 would have fixed that night and rotted at v3.
+    """
+    from forge.training.data import check_arm_versions
+
+    for version in ("random_v1", "random_v2", "random_v17"):
+        check_arm_versions("random", {version}, "data/silver/random")
+
+
+def test_arm_c_shares_the_mirror_arms_prompt_family():
+    from forge.training.data import check_arm_versions
+
+    check_arm_versions("hard_negative", {"mirror_v2"}, "data/silver/mirrors")
+
+
+def test_one_arms_data_under_another_arms_config_is_still_refused():
+    """The thing the guard is actually for, unchanged by the fix."""
+    from forge.training.data import ArmMismatch, check_arm_versions
+
+    with pytest.raises(ArmMismatch, match="wrong data"):
+        check_arm_versions("random", {"mirror_v2"}, "data/silver/random")
+    with pytest.raises(ArmMismatch, match="wrong data"):
+        check_arm_versions("mirror", {"random_v2"}, "data/silver/mirrors")
+
+
+def test_a_directory_holding_two_prompt_versions_is_refused():
+    """The stronger half, which the old exact-match check only got by accident.
+
+    A directory with both v1 and v2 is a corpus that was half regenerated. Training
+    across a prompt change averages two different data-generating processes, and nothing
+    downstream can see that it happened.
+    """
+    from forge.training.data import ArmMismatch, check_arm_versions
+
+    with pytest.raises(ArmMismatch, match="mixes prompt versions"):
+        check_arm_versions("random", {"random_v1", "random_v2"}, "data/silver/random")
+
+
+def test_an_unknown_arm_name_does_not_silently_pass_everything():
+    """An arm with no declared family means the check cannot run, not that it passed."""
+    from forge.training.data import ARM_PROMPT_FAMILY
+
+    assert set(ARM_PROMPT_FAMILY) == {"random", "mirror", "hard_negative"}

@@ -14,6 +14,7 @@ torch is imported lazily so the rest of the package still imports without it.
 from __future__ import annotations
 
 import glob
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -42,11 +43,54 @@ def _single_span(text: str, label: int) -> list[tuple[int, int, str]]:
     return [(0, len(text), tl)]
 
 
-ARM_PROMPT_VERSION = {"random": "random_v1", "mirror": "mirror_v1", "hard_negative": "mirror_v1"}
+# WHICH PROMPT FAMILY EACH ARM IS ALLOWED TO TRAIN ON. Arm C trains on mirrors, so it
+# shares the mirror arm's prompt family.
+ARM_PROMPT_FAMILY = {"random": "random", "mirror": "mirror", "hard_negative": "mirror"}
+
+# Kept for callers that still import it; derived, not a second source of truth.
+ARM_PROMPT_VERSION = {arm: f"{fam}_v1" for arm, fam in ARM_PROMPT_FAMILY.items()}
 
 
 class ArmMismatch(RuntimeError):
     pass
+
+
+def check_arm_versions(expect_arm: str, seen_versions: set[str], ai_root) -> None:
+    """Refuse to train an arm on another arm's data, or on a mixture of prompt versions.
+
+    THE CHECK WAS PINNED TO EXACT VERSION STRINGS AND THE STRINGS MOVED. This was a map
+    from arm to the literal "random_v1" / "mirror_v1". Correcting the generation prompts
+    to ask for words rather than tokens made them v2, per data_spec_v1's rule that a
+    wording change is a new version, and the first training run after that died with
+    "config declares arm 'random' but data/silver/random contains ['random_v2']". The
+    guard was right that something had changed and wrong about what: the data was correct
+    and the guard was stale.
+
+    Bumping the literals to v2 would have fixed tonight and rotted again at v3. What the
+    guard is actually for is that two arms must not read the same directory, since that
+    produces identical results and a false finding. So it now checks the prompt FAMILY,
+    which is the arm's identity and does not change, and separately requires that every
+    document in a directory share ONE version, which is the stronger half: a directory
+    holding both v1 and v2 is a corpus half-regenerated, and averaging across a prompt
+    change is its own silent confound.
+    """
+    family = ARM_PROMPT_FAMILY.get(expect_arm)
+    if not family or not seen_versions:
+        return
+    wrong = {v for v in seen_versions if not re.fullmatch(rf"{family}_v\d+", v or "")}
+    if wrong:
+        raise ArmMismatch(
+            f"config declares arm {expect_arm!r} (expects prompt_version "
+            f"{family}_v<N>) but {ai_root} contains {sorted(seen_versions)}. The arm is "
+            "training on the wrong data. Two arms reading the same directory produce "
+            "identical results and a false finding."
+        )
+    if len(seen_versions) > 1:
+        raise ArmMismatch(
+            f"{ai_root} mixes prompt versions {sorted(seen_versions)}. A half-regenerated "
+            "corpus trains across a prompt change, which is a confound nothing downstream "
+            "can see. Regenerate the whole arm or delete the older part."
+        )
 
 
 def load_examples(
@@ -113,15 +157,8 @@ def load_examples(
                                           r["text"], 1, _single_span(r["text"], 1), r["domain"],
                                           g.get("family", "unknown"), str(g.get("released", ""))))
 
-        if expect_arm and seen_versions:
-            want = ARM_PROMPT_VERSION.get(expect_arm)
-            if want and not seen_versions <= {want}:
-                raise ArmMismatch(
-                    f"config declares arm '{expect_arm}' (expects prompt_version "
-                    f"{want!r}) but {ai_root} contains {sorted(seen_versions)}. The arm "
-                    "is training on the wrong data. Two arms reading the same directory "
-                    "produce identical results and a false finding."
-                )
+        if expect_arm:
+            check_arm_versions(expect_arm, seen_versions, ai_root)
 
     if mixed_root:
         for f in sorted(glob.glob(str(Path(mixed_root) / "split=*/*.parquet"))):
