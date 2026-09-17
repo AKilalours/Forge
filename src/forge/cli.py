@@ -190,6 +190,11 @@ def generate_random_cmd(
         help="generate just this held-in family's share of --n; the other families' "
              "documents are assigned as usual and left for another invocation",
     ),
+    validation_from: str = typer.Option(
+        "configs/generation/mirror_minimal.yaml", "--validation-from",
+        help="take the length band and retry count from THIS config, which is arm B's, "
+             "so both arms are validated identically and differ only in matching",
+    ),
 ) -> None:
     """Arm A: conventional random synthetic data. The control the project measures against.
 
@@ -204,8 +209,13 @@ def generate_random_cmd(
         typer.secho("backend=fake: output is a pipeline test, NOT training data.",
                     fg=typer.colors.YELLOW)
     pool = length_pool_from_corpus(humans)
+    # ARM B'S VALIDATION BLOCK, ON PURPOSE. Arm A used to fall back to the looser
+    # signature defaults (0.5 to 2.0 against arm B's 0.6 to 1.6), which meant the control
+    # arm accepted longer documents than the mirror arm and the two arms differed in
+    # something other than matching.
+    validation = cfg.load(validation_from).get("validation", {})
     res = generate_random(n, pool, cfg.load(generators), backend=backend,
-                          only_family=only_family)
+                          only_family=only_family, validation=validation)
     # THE PART NAME CARRIES THE FAMILY so four one-family runs accumulate under one root
     # rather than each overwriting the last. --n stays the FULL corpus size in every one
     # of them: it is what documents are assigned against, not what this call produces.

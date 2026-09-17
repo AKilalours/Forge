@@ -191,3 +191,51 @@ def test_parts_accumulate_instead_of_overwriting_each_other(tmp_path):
     import pyarrow.parquet as pq
     rows = sum(pq.read_table(f).num_rows for f in on_disk)
     assert rows == total, "a later family overwrote an earlier one"
+
+
+# ------------------------------------- the two arms must be validated the same way
+
+def _mirror_validation():
+    return load("configs/generation/mirror_minimal.yaml")["validation"]
+
+
+def test_the_control_arm_takes_the_mirror_arms_length_band():
+    """The arms are supposed to differ in MATCHING and in nothing else.
+
+    Arm B read 0.6 to 1.6 from its config. Arm A used the signature defaults, 0.5 to 2.0,
+    because the CLI passed nothing, so the control arm kept documents the mirror arm
+    would have rejected. On the finished corpus arm A's documents ran a median of 306
+    words against the human corpus's 257. A looser length policy on one arm is a second
+    difference between the arms, and it points the same direction as the result.
+    """
+    v = _mirror_validation()
+    res = generate_random(20, POOL, _cfg(), backend="fake", validation=v)
+    assert res.stats["validation"]["length_ratio_min"] == v["length_ratio_min"]
+    assert res.stats["validation"]["length_ratio_max"] == v["length_ratio_max"]
+    assert res.stats["validation"]["max_retries"] == v["max_retries"]
+
+
+def test_the_band_actually_applied_is_recorded_in_the_stats():
+    """A band that is not written down is a band nobody can check afterwards."""
+    res = generate_random(20, POOL, _cfg(), backend="fake")
+    assert set(res.stats["validation"]) == {
+        "length_ratio_min", "length_ratio_max", "max_retries",
+    }
+
+
+def test_the_mirror_config_band_is_narrower_than_the_old_control_default():
+    """Pins the asymmetry that caused this, so a future edit cannot quietly undo it.
+
+    0.5 to 2.0 permits double the target length but only half of it. Every generator
+    tested writes long, so an asymmetric band does not average out; it shifts the arm.
+    """
+    v = _mirror_validation()
+    assert v["length_ratio_min"] > 0.5
+    assert v["length_ratio_max"] < 2.0
+
+
+def test_an_explicit_argument_still_wins_over_an_empty_validation_block():
+    res = generate_random(20, POOL, _cfg(), backend="fake",
+                          length_ratio_min=0.9, length_ratio_max=1.1, validation={})
+    assert res.stats["validation"]["length_ratio_min"] == 0.9
+    assert res.stats["validation"]["length_ratio_max"] == 1.1

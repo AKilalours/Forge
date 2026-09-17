@@ -123,12 +123,33 @@ def generate_random(
     length_ratio_max: float = 2.0,
     max_retries: int = 2,
     only_family: str | None = None,
+    validation: dict | None = None,
 ) -> RandomResult:
     from forge.generation.mirror import _PREAMBLE
     from forge.generation.run import GENERATION_BATCH, batch_generate, build_generator, release
 
     if not length_pool:
         raise ValueError("length_pool is empty; read it from the human corpus")
+
+    # THE TWO ARMS WERE VALIDATED DIFFERENTLY, WHICH IS A DIFFERENCE THE EXPERIMENT
+    # CLAIMS NOT TO HAVE.
+    #
+    # Arm B reads length_ratio_min 0.6 and max 1.6 from its mirror config. Arm A used
+    # these signature defaults, 0.5 and 2.0, and the CLI never passed anything else. So
+    # the control arm kept documents the mirror arm would have thrown away, and the band
+    # is asymmetric on top of that: double the target length is allowed, half is not.
+    # Measured on the finished corpus, arm A's documents ran a median of 306 words
+    # against the human corpus's 257.
+    #
+    # The claim this project makes is that the arms differ in MATCHING and in nothing
+    # else. Two different length policies is a second difference, pointing the same way
+    # as the result. Passing arm B's own validation block in makes there be one policy
+    # with one source, and the band is recorded in the stats so the artifact says which
+    # one was applied rather than leaving it to be inferred from a default.
+    if validation:
+        length_ratio_min = validation.get("length_ratio_min", length_ratio_min)
+        length_ratio_max = validation.get("length_ratio_max", length_ratio_max)
+        max_retries = validation.get("max_retries", max_retries)
 
     roster = parse_roster(generators_cfg)
     families = held_in_families(roster)
@@ -270,7 +291,12 @@ def generate_random(
 
     assert_no_held_out(roster, used)
     s = stats.as_dict()
-    s.update(families_used=sorted(used), backend=backend, arm="random")
+    s.update(
+        families_used=sorted(used), backend=backend, arm="random",
+        validation={"length_ratio_min": length_ratio_min,
+                    "length_ratio_max": length_ratio_max,
+                    "max_retries": max_retries},
+    )
     return RandomResult(out, s)
 
 
