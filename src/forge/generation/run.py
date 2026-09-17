@@ -194,6 +194,14 @@ def generate_mirrors(
                 f"Held-in families are {sorted(known)}."
             )
         by_family = {only_family: by_family.get(only_family, [])}
+        # AND THE STATS MUST SAY WHAT RAN. used_families was built while assigning every
+        # document, so a one-family run reported all four and described work it had not
+        # done. The per-document records were always right, since each carries its own
+        # generator.family; the summary was the part that lied, which is the shape of
+        # defect this project keeps finding and is no better for being only a summary.
+        used_families.clear()
+        if by_family[only_family]:
+            used_families.add(only_family)
 
     # PASS 2. One family at a time, in large batches, releasing before the next.
     #

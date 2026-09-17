@@ -48,7 +48,9 @@ data:
   dataset_version: v0.2-min
   # IDENTICAL to baseline_minimal.yaml and mirror_minimal.yaml. See the note above: these
   # are not arm C's own budget, they are the shared budget, and arm C spends it differently.
-  ai_cap: 20000
+  # 19,736 is the mirror arm's accepted count on the regenerated v0.2-min corpus, which is
+  # the smaller of the two arms and therefore sets the budget for all three.
+  ai_cap: 19736
   human_cap: 20000
   ai_reference: human
   arm: hard_negative       # verified against prompt_version at load

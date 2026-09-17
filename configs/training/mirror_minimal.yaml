@@ -17,22 +17,30 @@ data:
   # different accepted counts. Set this to the SMALLER arm's count, identically in every
   # arm's config, before training. Left null the comparison measures data volume as much
   # as data strategy. Fill it in from the generation stats, do not guess.
-  # Filled from generation, not guessed: mirrors accepted 18,856 documents and random
-  # accepted 22,713, counted from the parquet with pyarrow rather than from the log,
-  # because a log records what the generator believed and the parquet records what landed.
-  # The smaller arm sets the budget for both.
-  # Chosen for SCHEDULE, not for the experiment. The per-document length fix lifted
-  # acceptance from 31.5% to about 99.5%, so each arm now yields roughly 59,000 documents
-  # instead of 18,856. That is more data than there is night: 119k documents at three
-  # epochs is about 4.5 GPU-hours PER ARM. 20,000 of each class, two epochs, is under an
-  # hour per arm and is a perfectly respectable size for the claim being made. The full
-  # corpus stays on disk for a scaled-up run later.
-  ai_cap: 20000
+  # Counted from the parquet with pyarrow, not from the log, because a log records what
+  # the generator believed and the parquet records what landed. Regenerated corpus,
+  # dataset v0.2-min, chat template and words prompt: random accepted 19,992 documents
+  # (phi 5055, falcon 5045, qwen 4992, smollm 4900) and mirrors accepted 19,736 (phi
+  # 5113, smollm 4971, falcon 4880, qwen 4772). The smaller arm sets the budget for both.
+  #
+  # THE PREVIOUS VALUE WAS 20,000, WHICH IS NOT THE SMALLER ARM'S COUNT. It was a round
+  # number chosen before either arm had been counted, and at 20,000 the control arm would
+  # have trained on 19,992 documents against the mirror arm's 19,736: a 256-document
+  # advantage to one arm, small enough to look like nothing and pointing the same way as
+  # the result. The rule in this comment existed; it just had not been applied to the
+  # numbers that actually came out.
+  ai_cap: 19736
   human_cap: 20000
-  # LENGTH MATCHING. Point both arms at the MIRROR arm's directory. The mirror arm then
-  # matches itself, a no-op; the control arm is reshaped so its length distribution tracks
-  # the mirror arm's. Without this the arms differ in length as well as in matching,
-  # because 85% of mirror rejections were length overshoot and the survivors skew long.
+  # LENGTH MATCHING, against the HUMAN corpus. The comment here used to say "point both
+  # arms at the MIRROR arm's directory", describing an earlier design, while the value
+  # said `human`. Both arms' AI pools are resampled by cap_documents_matching so their
+  # word-count histogram tracks the human corpus's.
+  #
+  # This is what handles the length gap measured on the regenerated corpus: AI ran a
+  # median of 296 words against the human corpus's 257, about 15% long, at every
+  # percentile. Both arms pass through the same validator so the ARM COMPARISON was never
+  # at risk, but an unmatched AI pool lets the detector learn length instead of learning
+  # AI, which would inflate the absolute numbers against human text.
   ai_reference: human
   arm: mirror              # verified against prompt_version at load
 

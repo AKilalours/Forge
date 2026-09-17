@@ -249,3 +249,23 @@ def test_an_unknown_mirror_family_is_refused():
     """A typo must not write an empty part and exit 0."""
     with pytest.raises(ValueError, match="not a held-in family"):
         generate_mirrors(_humans(5), ROSTER, MIRROR_CFG, backend="fake", only_family="nope")
+
+
+def test_a_filtered_mirror_run_reports_only_the_family_that_ran():
+    """The stats block said four families for a run that used one.
+
+    used_families was accumulated while ASSIGNING every document, before the filter, so a
+    one-family invocation described work it had not done. The per-document records were
+    always correct, since each carries its own generator.family. The summary was the part
+    that lied, and a summary that overstates what a run did is the same defect as a
+    verdict that does not match its evidence, only smaller.
+    """
+    res = generate_mirrors(_humans(40), ROSTER, MIRROR_CFG, backend="fake",
+                           only_family="alpha")
+    assert res.stats["families_used"] == ["alpha"]
+
+
+def test_an_unfiltered_mirror_run_still_reports_every_family_it_used():
+    """The fix must not narrow the normal case to nothing."""
+    res = generate_mirrors(_humans(40), ROSTER, MIRROR_CFG, backend="fake")
+    assert res.stats["families_used"] == sorted(f["family"] for f in ROSTER["families"])
