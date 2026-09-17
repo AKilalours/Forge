@@ -179,7 +179,7 @@ def engineering_tab() -> None:
             st.markdown(f"**{panel.headline}**")
             if panel.rows:
                 st.dataframe(
-                    [dict(zip(panel.columns, row)) for row in panel.rows],
+                    [dict(zip(panel.columns, row, strict=True)) for row in panel.rows],
                     hide_index=True,
                     use_container_width=True,
                 )

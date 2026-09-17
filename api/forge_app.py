@@ -53,7 +53,6 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
-
 MAX_IMAGE_BYTES = 25 * 1024 * 1024
 MAX_TEXT_CHARS = 50_000
 

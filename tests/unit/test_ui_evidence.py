@@ -11,6 +11,7 @@ three properties that make the panel safer than the alternative:
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import pathlib
 import re
@@ -128,5 +129,5 @@ def test_the_page_wires_the_panel_in():
 def test_panel_is_immutable():
     """Panels are handed to a renderer; a renderer that edits one has changed a record."""
     panel = Panel(key="k", title="t", sources=("s",), status=MISSING, headline="h")
-    with pytest.raises(Exception):
+    with pytest.raises(dataclasses.FrozenInstanceError):
         panel.headline = "something else"  # type: ignore[misc]

@@ -23,7 +23,7 @@ import time
 from fastapi import FastAPI, HTTPException, Response
 from pydantic import BaseModel, Field
 
-from forge.inference.decision import DecisionPolicy, decide
+from forge.inference.decision import DecisionPolicy
 
 app = FastAPI(
     title="FORGE",

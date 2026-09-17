@@ -32,7 +32,13 @@ jobs:
       - run: pip install -e ".[dev,serve]"
       # scripts/ is in scope because it is not scratch: eval_ood.py produced the
       # published benchmark numbers and check_readme_claims.py is a gate below.
-      - run: ruff check src tests scripts
+      # THE TWO FILES RUFF NEVER SAW WERE THE INTERFACE. This line read
+      # `ruff check src tests scripts` and the job was green, while api/forge_app.py
+      # carried an unsorted import block and api/main.py an unused import, because
+      # neither api/ nor the repo root was ever in the list. The deployed page,
+      # streamlit_app.py, sat in the same blind spot. A linter with a hand-written path
+      # list checks the paths somebody remembered, which is not the same as the project.
+      - run: ruff check .
       - run: pytest --cov=forge --cov-report=term-missing
       # Published numbers must still match the artifacts that produced them.
       - run: python scripts/check_readme_claims.py
