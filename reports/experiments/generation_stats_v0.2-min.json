@@ -1,0 +1,78 @@
+{
+  "what_this_is": "Generation statistics for dataset v0.2-min, and the probe measurements that identified the chat-template defect. Recorded here because the two runs happened on RunPod containers with no persistent volume and the logs were destroyed with them.",
+  "provenance": {
+    "recomputable": "per_family_documents is counted from the committed parquet with pyarrow and can be reproduced at any time from data/silver/random and data/silver/mirrors.",
+    "transcribed": "Everything under `probes` and the acceptance rates were read from a pod terminal whose logs no longer exist. They are transcription, not artifacts, and are labelled as such for the same reason cuda_latency.json labels its own. Do not cite them as measurements of equal standing with the JSON records in this directory.",
+    "lost": "genA.log and genB.log, the full generation logs including per-family rejection breakdowns for the final runs. The first pod was terminated before they were exported. Export logs before terminating a container that has no volume."
+  },
+  "dataset_version": "v0.2-min",
+  "per_family_documents": {
+    "random": {
+      "phi": 5055,
+      "falcon": 5045,
+      "qwen": 4992,
+      "smollm": 4900,
+      "total": 19992
+    },
+    "mirrors": {
+      "phi": 5113,
+      "smollm": 4971,
+      "falcon": 4880,
+      "qwen": 4772,
+      "total": 19736
+    }
+  },
+  "prompt_versions": {
+    "random": "random_v2",
+    "mirrors": "mirror_v2"
+  },
+  "probes": {
+    "the_defect": {
+      "family": "smollm",
+      "n_requested": 1000,
+      "accepted": 193,
+      "attempts": 565,
+      "acceptance_rate": 0.342,
+      "rejected": {
+        "empty": 169,
+        "too_short": 201,
+        "assistant_preamble": 2
+      },
+      "reading": "2 assistant preambles in 565 attempts is the diagnosis. The validator rejects 'Sure, here is...' openings because a chat model reaches for them, so two in 565 is not an instruction-tuned model resisting the instruction, it is a model that was never in chat mode. 169 empty outputs is what a base-mode continuation of a prompt ending '...do not add any meta commentary.' produces."
+    },
+    "after_the_chat_template": {
+      "family": "smollm",
+      "n_requested": 1000,
+      "accepted": 250,
+      "attempts": 261,
+      "acceptance_rate": 0.958,
+      "rejected": {
+        "too_short": 11
+      },
+      "reading": "Empty went to zero and every assigned document produced one."
+    },
+    "qwen_under_the_old_prompt": {
+      "family": "qwen",
+      "n_requested": 1000,
+      "accepted": 118,
+      "attempts": 542,
+      "acceptance_rate": 0.218,
+      "rejected": {
+        "too_short": 408,
+        "assistant_preamble": 16
+      },
+      "reading": "Rejected for being too SHORT, the opposite direction to the other three families. The prompt asked for a number of 'tokens' while approx_token_count, the extractor's target and the validator's ratio are all word counts, so every model was aiming at a number in a unit nothing measured. Correcting the unit took Qwen from 1,747 accepted documents in the full run to 4,992."
+    }
+  },
+  "mirror_arm_final_cell": {
+    "family": "phi",
+    "accepted": 5113,
+    "attempts": 5114,
+    "acceptance_rate": 0.9998,
+    "rejected": {
+      "too_short": 1
+    },
+    "extraction_failures": 0,
+    "note": "The only final-run cell whose summary survives; the rest went with the logs."
+  }
+}
