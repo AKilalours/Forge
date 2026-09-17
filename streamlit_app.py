@@ -151,6 +151,43 @@ def image_tab() -> None:
     show(image_result(payload), height=height)
 
 
+# ---------------------------------------------------------------------- engineering tab
+
+def engineering_tab() -> None:
+    """The system behind the verdict, read out of the artifacts that measured it.
+
+    NOT A COPY OF THE README. `forge.ui.evidence` opens the same JSON files the README
+    quotes and `scripts/check_readme_claims.py` gates, so this page cannot drift from them:
+    there is no number to drift. A missing artifact renders as "not measured" rather than
+    as a blank or a remembered value.
+    """
+    from forge.ui.evidence import MEASURED, build_panels
+
+    st.caption(
+        "Every figure below is read at page load from the JSON artifact written by the run "
+        "that measured it. Nothing here is typed in. Each table carries the condition "
+        "recorded with it, because these numbers mean the wrong thing without it."
+    )
+
+    panels = build_panels()
+    for panel in panels:
+        with st.expander(panel.title, expanded=(panel is panels[0])):
+            if panel.status != MEASURED:
+                st.info(panel.headline)
+                st.caption("source: " + ", ".join(panel.sources))
+                continue
+            st.markdown(f"**{panel.headline}**")
+            if panel.rows:
+                st.dataframe(
+                    [dict(zip(panel.columns, row)) for row in panel.rows],
+                    hide_index=True,
+                    use_container_width=True,
+                )
+            for caveat in panel.caveats:
+                st.caption("⚠ " + caveat)
+            st.caption("source: " + ", ".join(panel.sources))
+
+
 # ---------------------------------------------------------------------------------- page
 
 st.title("FORGE Detect")
@@ -158,11 +195,13 @@ st.caption(
     "Failure-driven synthetic data generation for robust AI-content detection. Runs on CPU."
 )
 
-text_pane, image_pane = st.tabs(["Text", "Image"])
+text_pane, image_pane, eng_pane = st.tabs(["Text", "Image", "Engineering"])
 with text_pane:
     text_tab()
 with image_pane:
     image_tab()
+with eng_pane:
+    engineering_tab()
 
 st.divider()
 # THE FOOTER SAID SOMETHING FALSE. It explained that one arm was held in memory at a time,

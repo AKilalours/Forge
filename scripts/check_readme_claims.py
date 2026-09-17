@@ -101,6 +101,38 @@ def parse_collected_count(text: str) -> int | None:
     return len(node_ids) or None
 
 
+def suite_size_claims(md: str) -> list[tuple[int, int]]:
+    """Every README claim about the size of the whole suite, as (line, count).
+
+    WHY THIS IS A FUNCTION AND NOT A REGEX INLINE IN main(). The badge was gated and the
+    prose was not, so the prose drifted: this README carried a badge reading 985 beside two
+    sentences reading 918 and nothing failed, because the only check ever written looked at
+    the badge. Pulling the scan out here means it can be tested against text that has the
+    drift in it, rather than only against a README that currently happens to agree.
+
+    WHAT COUNTS AS A CLAIM ABOUT THE SUITE. Not every "N tests" in the README is one: line
+    339 says a module's "11 tests" run in their own CI job, which is a true statement about
+    eleven tests and has nothing to do with the total. Guessing which is which from the
+    number would be a heuristic, and heuristics that almost work are the whole subject of
+    this file. So the marking is explicit instead:
+
+        **994 tests**                         bold, anywhere
+        tests/unit/    # 994 tests, ...       on a line naming the test directory
+
+    A count written any other way is NOT gated. That is a real gap and it is stated here
+    rather than hidden: if you write a sentence claiming the suite size, bold the number,
+    or it will be free to rot exactly the way 918 did.
+    """
+    claims: list[tuple[int, int]] = []
+    for lineno, line in enumerate(md.splitlines(), start=1):
+        for m in re.finditer(r"\*\*(\d+) tests\*\*", line):
+            claims.append((lineno, int(m.group(1))))
+        if "tests/unit/" in line:
+            for m in re.finditer(r"(\d+) tests\b", line):
+                claims.append((lineno, int(m.group(1))))
+    return claims
+
+
 def collected_test_count() -> tuple[int | None, str]:
     """Ask pytest how many tests exist, for the badge that claims a number.
 
@@ -464,6 +496,17 @@ def main(check_test_count: bool = True) -> int:
         bad.append(f"the test-count badge check did not work: {reason}")
     elif reason.startswith("unavailable"):
         print(f"note: the test-count badge was not checked. {reason}")
+
+    # THE BADGE WAS GATED AND THE PROSE WAS NOT, so the prose drifted. For sixty-seven
+    # tests' worth of commits this README carried a badge reading 985 and two sentences
+    # reading 918, and nothing failed, because the check above only ever looked at the
+    # badge. A number is checked or it is decoration; there is no third state. Every
+    # written claim about how many tests exist is now compared against the same count.
+    if counted is not None:
+        for line, claimed in suite_size_claims(md):
+            if claimed != counted:
+                bad.append(f"README line {line} says {claimed} tests, "
+                           f"pytest collects {counted}")
 
     # ---- the one prose number worth pinning ---------------------------------
     # It is the whole argument of the RAID paragraph, so it gets checked like a table.

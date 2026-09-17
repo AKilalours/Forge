@@ -21,6 +21,7 @@ The samples below are real pytest output, not invented.
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -28,7 +29,11 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
-from check_readme_claims import main, parse_collected_count  # noqa: E402
+from check_readme_claims import (  # noqa: E402
+    main,
+    parse_collected_count,
+    suite_size_claims,
+)
 
 MODERN = """tests/unit/test_arm_configs.py::test_both_arms_declare_a_budget
 tests/unit/test_arm_configs.py::test_the_arms_agree_on_the_budget
@@ -90,3 +95,49 @@ def test_the_claim_check_still_passes_without_spawning_pytest() -> None:
     test that spawns the collector it is running under is slow at best.
     """
     assert main(check_test_count=False) == 0
+
+
+# --------------------------------------------------- the prose the badge check never read
+
+def test_bold_and_tree_counts_are_found_and_located() -> None:
+    md = "# Title\n\n**918 tests**, mostly regressions.\n\n\u251c\u2500 tests/unit/  # 918 tests, named\n"
+    assert suite_size_claims(md) == [(3, 918), (5, 918)]
+
+
+def test_a_readme_whose_badge_and_prose_disagree_is_caught() -> None:
+    """The exact drift this project shipped, reconstructed.
+
+    Badge 985, prose 918, CI green for months. The badge check looked at the badge and at
+    nothing else, so the sentence under it was free to say whatever it said.
+    """
+    md = "Tests-985%20passing\n\n**918 tests**, and the interesting ones are regressions.\n"
+    disagreeing = [(line, n) for line, n in suite_size_claims(md) if n != 985]
+    assert disagreeing == [(3, 918)]
+
+
+def test_a_count_about_one_module_is_not_a_claim_about_the_suite() -> None:
+    """README line 339 says a module's 11 tests run in their own CI job. It is not the total.
+
+    Treating it as one would make the gate fail on a true sentence, and a gate that cries
+    wolf gets its check deleted rather than its claim fixed.
+    """
+    md = "> its 11 tests run in **their own CI job** rather than skipping in the main one\n"
+    assert suite_size_claims(md) == []
+
+
+def test_an_unbolded_suite_count_is_knowingly_not_gated() -> None:
+    """The stated gap, pinned so it cannot be discovered as a surprise later."""
+    assert suite_size_claims("The suite has 994 tests today.\n") == []
+
+
+def test_the_committed_readme_agrees_with_itself() -> None:
+    """Every gated count in the README is the number the badge claims."""
+    from pathlib import Path
+    md = (Path(__file__).resolve().parents[2] / "README.md").read_text()
+    badge = re.search(r"Tests-(\d+)%20passing", md)
+    assert badge is not None
+    claims = suite_size_claims(md)
+    assert claims, "the README no longer states its suite size in prose at all"
+    assert {n for _, n in claims} == {int(badge.group(1))}, (
+        f"README prose claims {claims} against a badge of {badge.group(1)}"
+    )
