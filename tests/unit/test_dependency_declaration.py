@@ -315,6 +315,11 @@ def test_the_streamlit_app_declares_the_same_ceilings():
 # guard needs one, not before.
 IMPORT_TO_DISTRIBUTION = {
     "PIL": "pillow",
+    # Added when the flywheel DAG tests landed and this check caught them: the import name
+    # is `airflow`, the distribution is `apache-airflow`. The guard was written hours
+    # earlier for httpx and found the next instance itself, which is the only real evidence
+    # that a guard works.
+    "airflow": "apache-airflow",
 }
 
 # Modules the standard library provides on every supported version. tomllib is NOT here:

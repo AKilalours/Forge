@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Tests-965%20passing-00C853?style=for-the-badge"/>
+  <img src="https://img.shields.io/badge/Tests-976%20passing-00C853?style=for-the-badge"/>
   <img src="https://img.shields.io/badge/In--distribution%20AUROC-0.99997-00C853?style=for-the-badge"/>
   <img src="https://img.shields.io/badge/FPR%20budget-0.1%25-0056D2?style=for-the-badge"/>
   <img src="https://img.shields.io/badge/Headline-Partial%20null%20result-FF8F00?style=for-the-badge"/>
@@ -258,6 +258,44 @@ well under 10x, and they were measured for different reasons on different code.
 **Scope.** This times the model forward over pre-tokenised windows. Tokenisation,
 windowing and HTTP are not included, so a real request costs this plus those.
 
+
+### The flywheel, as a DAG
+
+The recurring job in FORGE is the flywheel itself: scan the reserve pool, cluster the
+failures, generate targeted mirrors, retrain, evaluate, gate. It is the only thing here
+that genuinely earns an orchestrator, and
+[`orchestration/dags/forge_flywheel.py`](orchestration/dags/forge_flywheel.py) is it.
+
+Four decisions in that file are not defaults, and each has a cost behind it.
+
+**Every step is a `BashOperator` shelling out to the `forge` CLI.** Airflow's scheduler
+re-imports every DAG file on a short loop, so `import torch` at module scope costs seconds
+of CPU and a gigabyte of RSS *per parse cycle*, in the process whose job is scheduling. Two
+tests pin it: one times the import, one parses the file with `ast` and inspects the import
+statements. The second exists because the first version of that check searched the source
+**text** and failed on the docstring explaining the rule. A check that greps source code is
+a check a comment can break.
+
+**`catchup=False`.** Airflow defaults this to `True`. A `@weekly` DAG deployed with a
+`start_date` three months back immediately queues twelve backfill runs, each of which
+retrains a model.
+
+**`max_active_runs=1`.** Two concurrent rounds mine the same reserve pool. The mined-id
+ledger exists to stop round two re-finding round one's failures, and that guarantee is void
+if the rounds overlap.
+
+**No retries on train or gate.** A training job that failed on resources fails the same way
+at twice the cost. A gate that failed on the numbers will fail on the same numbers.
+
+Artifact paths carry the run id, because a flat filename already caused one collision in
+this repository today, and a scheduler turns occasional into routine.
+
+> **What is claimed and what is not.** The DAG is implemented, parses under Airflow 3, and
+> its 11 tests run in **their own CI job** rather than skipping in the main one, because
+> `importorskip("airflow")` in a job that does not install Airflow is how a test file goes
+> unrun for months. It has **never been run against a real corpus**: `data/reserve/` is
+> empty because the corpus is not redistributable. This is a validated pipeline definition,
+> not a pipeline with a run history.
 
 ### DeepSpeed against FSDP, on the same hardware, at the same global batch
 

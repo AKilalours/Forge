@@ -37,6 +37,26 @@ jobs:
       # Published numbers must still match the artifacts that produced them.
       - run: python scripts/check_readme_claims.py
 
+  # SEPARATE JOB, ON PURPOSE. tests/unit/test_flywheel_dag.py guards itself with
+  # importorskip("airflow"), and the main test job installs [dev,serve]. Left alone the DAG
+  # tests would SKIP in CI and the job would go green: exactly how
+  # tests/unit/test_forge_app.py went unrun for months, rediscovered this morning.
+  #
+  # Airflow is a heavy install with its own pin graph, so adding it to the matrix would
+  # slow every run and risk resolver conflicts with the model stack. Its own job keeps the
+  # matrix fast AND keeps these tests from quietly not running.
+  dag-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[dev,orchestration]"
+      - run: ruff check orchestration
+      - run: pytest -q -ra tests/unit/test_flywheel_dag.py
+
   spec-check:
     runs-on: ubuntu-latest
     steps:

@@ -96,7 +96,14 @@ serve = [
   "boto3>=1.34",
 ]
 orchestration = [
-  "apache-airflow>=2.9",
+  # UPPER BOUND DELIBERATE, and for the reason ruff has one. An unbounded pin lets the next
+  # `pip install` choose the major version. Airflow 3 moved DAG to airflow.sdk and the
+  # standard operators into a provider package; unbounded, this repo would have been
+  # written against 2.x paths, installed 3.x, and run on deprecation warnings until a 4.0
+  # removed them. The DAG targets 3.x explicitly. Bump this on purpose and fix what the
+  # bump finds.
+  "apache-airflow>=3.0,<4",
+  "apache-airflow-providers-standard>=0.1",
   "pyspark>=3.5",
 ]
 # The Streamlit deployment. Streamlit Community Cloud is the only free host that runs a
