@@ -47,6 +47,57 @@ def require_pinned_revision(family: str, revision: str | None) -> str:
     return revision  # type: ignore[return-value]
 
 
+
+class NoChatTemplateError(RuntimeError):
+    pass
+
+
+def to_chat_prompt(prompt: str, tokenizer) -> str:
+    """Wrap one instruction in the model's OWN chat template.
+
+    THE BUG THIS EXISTS TO FIX, because it produced data rather than an error. Every
+    held-in family in the roster is instruction-tuned, and the arm-A prompt is plain
+    instruction text ending in "Output only the text itself." Both backends handed that
+    string to the model raw, with no chat template, so the models were not being
+    instructed at all: they were continuing a piece of text that happened to look like an
+    instruction. A 1.7B model asked to continue "...do not add any meta commentary."
+    very often continues with end-of-sequence.
+
+    THE MEASUREMENT THAT IDENTIFIED IT. A probe run accepted 193 documents from 565
+    attempts: 169 empty, 201 too short, and 2 assistant preambles. That last number is
+    the tell. The validator rejects "Sure, here's a..." openings precisely because a chat
+    model reaches for them, and two in 565 is not a chat model resisting the instruction,
+    it is a model that was never in chat mode.
+
+    This was never only a yield problem. Text from an instruct model CONTINUING a prompt
+    is a different distribution from the same model ANSWERING it, and the distribution of
+    AI text is the whole subject of this project. A corpus built the first way and
+    described as four instruction-tuned families would not be one.
+
+    NO SILENT FALLBACK. A model with no chat template raises, because falling back to the
+    raw prompt is exactly the behaviour that produced a plausible-looking dataset from a
+    misuse of every model in the roster. A base model in the roster is a decision someone
+    should make on purpose.
+    """
+    template = getattr(tokenizer, "chat_template", None)
+    if not template:
+        raise NoChatTemplateError(
+            f"{getattr(tokenizer, 'name_or_path', tokenizer)!r} has no chat template. "
+            "Every held-in family is instruction-tuned and the generation prompt is an "
+            "instruction; sending it raw makes the model continue the text instead of "
+            "following it. Handle this model deliberately rather than falling back."
+        )
+    return tokenizer.apply_chat_template(
+        [{"role": "user", "content": prompt}],
+        tokenize=False,
+        add_generation_prompt=True,
+    )
+
+
+def to_chat_prompts(prompts: list[str], tokenizer) -> list[str]:
+    return [to_chat_prompt(p, tokenizer) for p in prompts]
+
+
 @runtime_checkable
 class Generator(Protocol):
     family: str
@@ -152,6 +203,7 @@ class VLLMGenerator:
         self.tensor_parallel_size = tensor_parallel_size
         self.max_model_len = max_model_len
         self._llm = None
+        self._tok = None
 
     def _check_fits(self, decoding: Decoding) -> None:
         """Refuse a decoding whose output alone cannot fit the reserved context.
@@ -180,6 +232,19 @@ class VLLMGenerator:
             )
         return self._llm
 
+    def _tokenizer(self):  # pragma: no cover - downloads the tokenizer
+        """The model's OWN tokenizer, pinned to the same revision as its weights.
+
+        Same revision as the weights on purpose: a chat template is part of the model,
+        and reading it from a different commit than the one generating would reintroduce
+        the reproducibility hole require_pinned_revision exists to close.
+        """
+        if self._tok is None:
+            from transformers import AutoTokenizer
+
+            self._tok = AutoTokenizer.from_pretrained(self.model_id, revision=self.revision)
+        return self._tok
+
     def _params(self, decoding: Decoding):  # pragma: no cover - needs vllm
         from vllm import SamplingParams
 
@@ -197,7 +262,8 @@ class VLLMGenerator:
         # already been constructed, which defeats the point of failing up front.
         self._check_fits(decoding)
         params = self._params(decoding)
-        outs = self._load().generate(prompts, params, use_tqdm=False)
+        chat = to_chat_prompts(prompts, self._tokenizer())
+        outs = self._load().generate(chat, params, use_tqdm=False)
         return [o.outputs[0].text for o in outs]
 
     def generate_many(self, prompts: list[str], decodings: list[Decoding]) -> list[str]:  # pragma: no cover
@@ -208,6 +274,7 @@ class VLLMGenerator:
         for d in decodings:
             self._check_fits(d)
         params = [self._params(d) for d in decodings]
+        prompts = to_chat_prompts(prompts, self._tokenizer())
         # use_tqdm=False: vLLM's per-request progress bar rewrites the line thousands of
         # times, which is unreadable in a tee'd log and makes the log ungreppable. The
         # runner prints its own batch-level progress instead.
@@ -223,6 +290,7 @@ class VLLMGenerator:
         refused to start. Dropping the reference is not enough; the allocator caches
         blocks, so the cache has to be emptied explicitly.
         """
+        self._tok = None
         if self._llm is None:
             return
         llm, self._llm = self._llm, None
@@ -271,7 +339,7 @@ class TransformersGenerator:
                 "text-generation", model=self.model_id, revision=self.revision, device_map=self.device
             )
         outs = self._pipe(
-            prompts,
+            to_chat_prompts(prompts, self._pipe.tokenizer),
             do_sample=not decoding.greedy,
             temperature=decoding.temperature or None,
             top_p=decoding.top_p,
