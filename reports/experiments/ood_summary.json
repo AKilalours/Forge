@@ -5,214 +5,198 @@
       "arm": "baseline",
       "benchmark": "hc3",
       "experiment": "forge_min_baseline",
-      "code_commit": "d090c9b1d3b03d70f74ffc5a5323bf2809a4126d",
-      "dataset_version": "v0.1-min",
+      "code_commit": "8e06099f3cbcb00e7cdac81e86be0e96191fbd57",
+      "dataset_version": "v0.2-min",
       "n_documents": 4000,
       "n_human": 2000,
       "n_ai": 2000,
       "n_windows": 4093,
       "fpr_budget": 0.001,
       "deployed": {
-        "threshold": 0.996956,
+        "threshold": 0.996586,
         "source": "fit on this arm's validation split; the operating point a user gets",
-        "fpr": 0.0055,
-        "fnr": 0.9395
+        "fpr": 0.0,
+        "fnr": 0.875
       },
       "refit_on_benchmark": {
-        "threshold": 0.9996466636657716,
+        "threshold": 0.9164778590202333,
         "source": "re-fit on this benchmark. OPTIMISTIC: not available at deployment",
         "fpr": 0.001,
-        "fnr": 0.9695
+        "fnr": 0.824
       },
-      "auroc_mean_pooled": 0.65827875,
-      "auroc_max_pooled": 0.65667975,
-      "ece": 0.4231728400392366,
+      "auroc_mean_pooled": 0.796339,
+      "auroc_max_pooled": 0.795912625,
+      "ece": 0.3953489535005242,
       "aggregation": "mean over windows; max reported alongside because it inflates FPR",
-      "seconds": 33.8
+      "seconds": 87.5
     },
     {
       "arm": "mirror",
       "benchmark": "hc3",
       "experiment": "forge_min_mirror",
-      "code_commit": "d090c9b1d3b03d70f74ffc5a5323bf2809a4126d",
-      "dataset_version": "v0.1-min",
+      "code_commit": "8e06099f3cbcb00e7cdac81e86be0e96191fbd57",
+      "dataset_version": "v0.2-min",
       "n_documents": 4000,
       "n_human": 2000,
       "n_ai": 2000,
       "n_windows": 4093,
       "fpr_budget": 0.001,
       "deployed": {
-        "threshold": 0.992285,
+        "threshold": 0.998252,
         "source": "fit on this arm's validation split; the operating point a user gets",
-        "fpr": 0.024,
-        "fnr": 0.6295
+        "fpr": 0.001,
+        "fnr": 0.6215
       },
       "refit_on_benchmark": {
-        "threshold": 0.9997676014900209,
+        "threshold": 0.9982513785362245,
         "source": "re-fit on this benchmark. OPTIMISTIC: not available at deployment",
         "fpr": 0.001,
-        "fnr": 0.9295
+        "fnr": 0.6215
       },
-      "auroc_mean_pooled": 0.885148125,
-      "auroc_max_pooled": 0.883249625,
-      "ece": 0.1831571070841087,
+      "auroc_mean_pooled": 0.95041175,
+      "auroc_max_pooled": 0.94997875,
+      "ece": 0.15250713461792098,
       "aggregation": "mean over windows; max reported alongside because it inflates FPR",
-      "seconds": 33.9
+      "seconds": 80.5
     },
     {
       "arm": "baseline",
       "benchmark": "mage",
       "experiment": "forge_min_baseline",
-      "code_commit": "d090c9b1d3b03d70f74ffc5a5323bf2809a4126d",
-      "dataset_version": "v0.1-min",
+      "code_commit": "8e06099f3cbcb00e7cdac81e86be0e96191fbd57",
+      "dataset_version": "v0.2-min",
       "n_documents": 4000,
       "n_human": 2000,
       "n_ai": 2000,
       "n_windows": 4935,
       "fpr_budget": 0.001,
       "deployed": {
-        "threshold": 0.996956,
-        "source": "fit on this arm's validation split; the operating point a user gets",
-        "fpr": 0.0085,
-        "fnr": 0.961
-      },
-      "refit_on_benchmark": {
-        "threshold": 0.9995734095573426,
-        "source": "re-fit on this benchmark. OPTIMISTIC: not available at deployment",
-        "fpr": 0.001,
-        "fnr": 0.9825
-      },
-      "auroc_mean_pooled": 0.58767425,
-      "auroc_max_pooled": 0.58842325,
-      "ece": 0.44101647617801676,
-      "aggregation": "mean over windows; max reported alongside because it inflates FPR",
-      "seconds": 57.5
-    },
-    {
-      "arm": "mirror",
-      "benchmark": "mage",
-      "experiment": "forge_min_mirror",
-      "code_commit": "d090c9b1d3b03d70f74ffc5a5323bf2809a4126d",
-      "dataset_version": "v0.1-min",
-      "n_documents": 4000,
-      "n_human": 2000,
-      "n_ai": 2000,
-      "n_windows": 4935,
-      "fpr_budget": 0.001,
-      "deployed": {
-        "threshold": 0.992285,
-        "source": "fit on this arm's validation split; the operating point a user gets",
-        "fpr": 0.0285,
-        "fnr": 0.8665
-      },
-      "refit_on_benchmark": {
-        "threshold": 0.999861240386963,
-        "source": "re-fit on this benchmark. OPTIMISTIC: not available at deployment",
-        "fpr": 0.001,
-        "fnr": 0.978
-      },
-      "auroc_mean_pooled": 0.62794325,
-      "auroc_max_pooled": 0.63071425,
-      "ece": 0.38103819015440926,
-      "aggregation": "mean over windows; max reported alongside because it inflates FPR",
-      "seconds": 47.6
-    },
-    {
-      "arm": "baseline",
-      "benchmark": "raid",
-      "experiment": "forge_min_baseline",
-      "code_commit": "d090c9b1d3b03d70f74ffc5a5323bf2809a4126d",
-      "dataset_version": "v0.1-min",
-      "n_documents": 4000,
-      "n_human": 2000,
-      "n_ai": 2000,
-      "n_windows": 4540,
-      "fpr_budget": 0.001,
-      "deployed": {
-        "threshold": 0.996956,
+        "threshold": 0.996586,
         "source": "fit on this arm's validation split; the operating point a user gets",
         "fpr": 0.0005,
-        "fnr": 0.825
+        "fnr": 0.9705
       },
       "refit_on_benchmark": {
-        "threshold": 0.9851770401000978,
+        "threshold": 0.9796661734580995,
         "source": "re-fit on this benchmark. OPTIMISTIC: not available at deployment",
         "fpr": 0.001,
-        "fnr": 0.8135
+        "fnr": 0.958
       },
-      "auroc_mean_pooled": 0.77919625,
-      "auroc_max_pooled": 0.7785275,
-      "ece": 0.3715112140721172,
+      "auroc_mean_pooled": 0.59657975,
+      "auroc_max_pooled": 0.5969655,
+      "ece": 0.46264234379634284,
       "aggregation": "mean over windows; max reported alongside because it inflates FPR",
-      "seconds": 85.9
+      "seconds": 151.8
     },
     {
       "arm": "mirror",
-      "benchmark": "raid",
+      "benchmark": "mage",
       "experiment": "forge_min_mirror",
-      "code_commit": "d090c9b1d3b03d70f74ffc5a5323bf2809a4126d",
-      "dataset_version": "v0.1-min",
+      "code_commit": "8e06099f3cbcb00e7cdac81e86be0e96191fbd57",
+      "dataset_version": "v0.2-min",
+      "n_documents": 4000,
+      "n_human": 2000,
+      "n_ai": 2000,
+      "n_windows": 4935,
+      "fpr_budget": 0.001,
+      "deployed": {
+        "threshold": 0.998252,
+        "source": "fit on this arm's validation split; the operating point a user gets",
+        "fpr": 0.006,
+        "fnr": 0.891
+      },
+      "refit_on_benchmark": {
+        "threshold": 0.9998013377189637,
+        "source": "re-fit on this benchmark. OPTIMISTIC: not available at deployment",
+        "fpr": 0.001,
+        "fnr": 0.949
+      },
+      "auroc_mean_pooled": 0.612365,
+      "auroc_max_pooled": 0.61453525,
+      "ece": 0.3872057046312837,
+      "aggregation": "mean over windows; max reported alongside because it inflates FPR",
+      "seconds": 144.1
+    },
+    {
+      "arm": "baseline",
+      "benchmark": "raid",
+      "experiment": "forge_min_baseline",
+      "code_commit": "8e06099f3cbcb00e7cdac81e86be0e96191fbd57",
+      "dataset_version": "v0.2-min",
       "n_documents": 4000,
       "n_human": 2000,
       "n_ai": 2000,
       "n_windows": 4540,
       "fpr_budget": 0.001,
       "deployed": {
-        "threshold": 0.992285,
+        "threshold": 0.996586,
         "source": "fit on this arm's validation split; the operating point a user gets",
         "fpr": 0.0,
-        "fnr": 0.7805
+        "fnr": 0.998
       },
       "refit_on_benchmark": {
-        "threshold": 0.8956348001956941,
+        "threshold": 0.0005575342802330853,
         "source": "re-fit on this benchmark. OPTIMISTIC: not available at deployment",
         "fpr": 0.001,
-        "fnr": 0.757
+        "fnr": 0.95
       },
-      "auroc_mean_pooled": 0.77643875,
-      "auroc_max_pooled": 0.77555175,
-      "ece": 0.353755090291671,
+      "auroc_mean_pooled": 0.718672625,
+      "auroc_max_pooled": 0.715979125,
+      "ece": 0.49724030693819726,
       "aggregation": "mean over windows; max reported alongside because it inflates FPR",
-      "seconds": 100.5
+      "seconds": 175.4
+    },
+    {
+      "arm": "mirror",
+      "benchmark": "raid",
+      "experiment": "forge_min_mirror",
+      "code_commit": "8e06099f3cbcb00e7cdac81e86be0e96191fbd57",
+      "dataset_version": "v0.2-min",
+      "n_documents": 4000,
+      "n_human": 2000,
+      "n_ai": 2000,
+      "n_windows": 4540,
+      "fpr_budget": 0.001,
+      "deployed": {
+        "threshold": 0.998252,
+        "source": "fit on this arm's validation split; the operating point a user gets",
+        "fpr": 0.001,
+        "fnr": 0.795
+      },
+      "refit_on_benchmark": {
+        "threshold": 0.9974742531776429,
+        "source": "re-fit on this benchmark. OPTIMISTIC: not available at deployment",
+        "fpr": 0.001,
+        "fnr": 0.781
+      },
+      "auroc_mean_pooled": 0.7871455,
+      "auroc_max_pooled": 0.78584025,
+      "ece": 0.29206155008705414,
+      "aggregation": "mean over windows; max reported alongside because it inflates FPR",
+      "seconds": 179.9
     }
   ],
   "deployed_threshold_description": {
     "hc3": {
       "misses": {
-        "random": 1879,
-        "mirror": 1259
+        "random": 1750,
+        "mirror": 1243
       },
       "n_ai": {
         "random": 2000,
         "mirror": 2000
       },
       "fpr_spent": {
-        "random": 0.0055,
-        "mirror": 0.024
+        "random": 0.0,
+        "mirror": 0.001
       },
       "thresholds_are_matched": false,
       "no_test_here": "The arms sit at different false-positive rates, so these two miss counts are NOT comparable and no test is run on them. See ood_mcnemar.json for the matched-budget paired test and ood_significance_*.json for the AUROC bootstrap."
     },
     "mage": {
       "misses": {
-        "random": 1922,
-        "mirror": 1733
-      },
-      "n_ai": {
-        "random": 2000,
-        "mirror": 2000
-      },
-      "fpr_spent": {
-        "random": 0.0085,
-        "mirror": 0.0285
-      },
-      "thresholds_are_matched": false,
-      "no_test_here": "The arms sit at different false-positive rates, so these two miss counts are NOT comparable and no test is run on them. See ood_mcnemar.json for the matched-budget paired test and ood_significance_*.json for the AUROC bootstrap."
-    },
-    "raid": {
-      "misses": {
-        "random": 1650,
-        "mirror": 1561
+        "random": 1941,
+        "mirror": 1782
       },
       "n_ai": {
         "random": 2000,
@@ -220,7 +204,23 @@
       },
       "fpr_spent": {
         "random": 0.0005,
-        "mirror": 0.0
+        "mirror": 0.006
+      },
+      "thresholds_are_matched": false,
+      "no_test_here": "The arms sit at different false-positive rates, so these two miss counts are NOT comparable and no test is run on them. See ood_mcnemar.json for the matched-budget paired test and ood_significance_*.json for the AUROC bootstrap."
+    },
+    "raid": {
+      "misses": {
+        "random": 1996,
+        "mirror": 1590
+      },
+      "n_ai": {
+        "random": 2000,
+        "mirror": 2000
+      },
+      "fpr_spent": {
+        "random": 0.0,
+        "mirror": 0.001
       },
       "thresholds_are_matched": false,
       "no_test_here": "The arms sit at different false-positive rates, so these two miss counts are NOT comparable and no test is run on them. See ood_mcnemar.json for the matched-budget paired test and ood_significance_*.json for the AUROC bootstrap."

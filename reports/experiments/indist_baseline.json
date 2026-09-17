@@ -1,153 +1,161 @@
 {
- "experiment": "forge_min_baseline",
- "smoke": false,
- "code_commit": "d090c9b1d3b03d70f74ffc5a5323bf2809a4126d",
- "dataset_version": "v0.1-min",
- "backbone": "microsoft/deberta-v3-base",
- "device": "cuda",
- "precision": "bf16",
- "arm": "random",
- "ai_source": "data/silver/random",
- "n_windows": {
-  "train": 32996,
-  "val": 4079,
-  "test": 4180
- },
- "steps": 1032,
- "wall_seconds": 1271.7,
- "fpr_budget": 0.001,
- "val": {
-  "loss": 0.015237,
-  "fpr_at_budget": 0.000502,
-  "threshold": 0.996956,
-  "fnr": 0.007191,
-  "auroc": 0.999974,
-  "ece": 0.004467,
-  "temperature": 1.484186,
-  "n_human": 1993,
-  "n_ai": 2086
- },
- "history": [
-  {
-   "step": 50,
-   "loss": 0.2823452949523926,
-   "lr": 1.639344262295082e-05,
-   "examples_per_second": 55.85924752907189
+  "experiment": "forge_min_baseline",
+  "smoke": false,
+  "code_commit": "8e06099f3cbcb00e7cdac81e86be0e96191fbd57",
+  "dataset_version": "v0.2-min",
+  "backbone": "microsoft/deberta-v3-base",
+  "device": "cuda",
+  "precision": "bf16",
+  "arm": "random",
+  "ai_source": "data/silver/random",
+  "n_windows": {
+    "train": 33651,
+    "val": 4177,
+    "test": 4288
   },
-  {
-   "step": 100,
-   "loss": 0.008182770572602749,
-   "lr": 1.9196704428424308e-05,
-   "examples_per_second": 55.89337718482173
+  "steps": 1052,
+  "wall_seconds": 1595.0,
+  "fpr_budget": 0.001,
+  "val": {
+    "loss": 0.012812,
+    "fpr_at_budget": 0.000502,
+    "threshold": 0.996586,
+    "fnr": 0.001832,
+    "auroc": 0.999989,
+    "ece": 0.002552,
+    "temperature": 1.592412,
+    "n_human": 1993,
+    "n_ai": 2184
   },
-  {
-   "step": 150,
-   "loss": 0.09194376319646835,
-   "lr": 1.816683831101957e-05,
-   "examples_per_second": 55.978584793962334
+  "history": [
+    {
+      "step": 100,
+      "loss": 0.001199660124257207,
+      "lr": 1.925176946410516e-05,
+      "examples_per_second": 45.7042323836742
+    },
+    {
+      "step": 150,
+      "loss": 0.0007904560770839453,
+      "lr": 1.8240647118301315e-05,
+      "examples_per_second": 45.771029955784236
+    },
+    {
+      "step": 200,
+      "loss": 0.0007922584190964699,
+      "lr": 1.7229524772497474e-05,
+      "examples_per_second": 45.85746639938382
+    },
+    {
+      "step": 250,
+      "loss": 0.0004767339851241559,
+      "lr": 1.6218402426693632e-05,
+      "examples_per_second": 45.830029229475166
+    },
+    {
+      "step": 300,
+      "loss": 0.007409496232867241,
+      "lr": 1.5207280080889788e-05,
+      "examples_per_second": 45.83162149056183
+    },
+    {
+      "step": 350,
+      "loss": 0.0005432806210592389,
+      "lr": 1.4196157735085946e-05,
+      "examples_per_second": 45.850008800706654
+    },
+    {
+      "step": 400,
+      "loss": 0.00021203645155765116,
+      "lr": 1.3185035389282103e-05,
+      "examples_per_second": 45.8124818092396
+    },
+    {
+      "step": 450,
+      "loss": 0.0001888398837763816,
+      "lr": 1.2173913043478263e-05,
+      "examples_per_second": 45.800592241658435
+    },
+    {
+      "step": 500,
+      "loss": 0.000303005741443485,
+      "lr": 1.116279069767442e-05,
+      "examples_per_second": 45.778998708931596
+    },
+    {
+      "step": 550,
+      "loss": 0.00018456722318660468,
+      "lr": 1.0151668351870577e-05,
+      "examples_per_second": 43.39354365608054
+    },
+    {
+      "step": 600,
+      "loss": 0.00016133234021253884,
+      "lr": 9.140546006066735e-06,
+      "examples_per_second": 43.586705728612266
+    },
+    {
+      "step": 650,
+      "loss": 0.00013888318790122867,
+      "lr": 8.129423660262892e-06,
+      "examples_per_second": 43.73480181231659
+    },
+    {
+      "step": 700,
+      "loss": 0.000165400851983577,
+      "lr": 7.11830131445905e-06,
+      "examples_per_second": 43.86676866097257
+    },
+    {
+      "step": 750,
+      "loss": 0.00018132058903574944,
+      "lr": 6.107178968655208e-06,
+      "examples_per_second": 43.97539950526347
+    },
+    {
+      "step": 800,
+      "loss": 0.00010088645649375394,
+      "lr": 5.096056622851365e-06,
+      "examples_per_second": 44.088254196779786
+    },
+    {
+      "step": 850,
+      "loss": 0.00010002490307670087,
+      "lr": 4.084934277047523e-06,
+      "examples_per_second": 44.19811724819884
+    },
+    {
+      "step": 900,
+      "loss": 0.00010213011410087347,
+      "lr": 3.073811931243681e-06,
+      "examples_per_second": 44.292116750095694
+    },
+    {
+      "step": 950,
+      "loss": 9.557507291901857e-05,
+      "lr": 2.0626895854398384e-06,
+      "examples_per_second": 44.36665758640102
+    },
+    {
+      "step": 1000,
+      "loss": 8.913349302019924e-05,
+      "lr": 1.051567239635996e-06,
+      "examples_per_second": 44.43077046111951
+    },
+    {
+      "step": 1050,
+      "loss": 0.00012179990153526887,
+      "lr": 4.0444893832153693e-08,
+      "examples_per_second": 44.50421675275887
+    }
+  ],
+  "tracking": {
+    "backend": "wandb",
+    "enabled": true,
+    "project": "forge",
+    "run_name": "forge_min_baseline",
+    "run_id": "ms2oreiz",
+    "run_url": "https://wandb.ai/akilalourdes-student/forge/runs/ms2oreiz"
   },
-  {
-   "step": 200,
-   "loss": 0.001990936230868101,
-   "lr": 1.713697219361483e-05,
-   "examples_per_second": 55.94758972670775
-  },
-  {
-   "step": 250,
-   "loss": 0.0012010661885142326,
-   "lr": 1.6107106076210095e-05,
-   "examples_per_second": 56.06674858153675
-  },
-  {
-   "step": 300,
-   "loss": 0.015438990667462349,
-   "lr": 1.5077239958805357e-05,
-   "examples_per_second": 55.99444542831247
-  },
-  {
-   "step": 350,
-   "loss": 0.017972862347960472,
-   "lr": 1.404737384140062e-05,
-   "examples_per_second": 56.052808703540926
-  },
-  {
-   "step": 400,
-   "loss": 0.0005370023427531123,
-   "lr": 1.3017507723995882e-05,
-   "examples_per_second": 56.09695475371479
-  },
-  {
-   "step": 450,
-   "loss": 0.5722553730010986,
-   "lr": 1.1987641606591145e-05,
-   "examples_per_second": 56.066320869798176
-  },
-  {
-   "step": 500,
-   "loss": 0.0014124847948551178,
-   "lr": 1.0957775489186406e-05,
-   "examples_per_second": 56.09756147818045
-  },
-  {
-   "step": 550,
-   "loss": 0.0007188828894868493,
-   "lr": 9.92790937178167e-06,
-   "examples_per_second": 53.21822413134175
-  },
-  {
-   "step": 600,
-   "loss": 0.0655227079987526,
-   "lr": 8.898043254376931e-06,
-   "examples_per_second": 53.457973745835666
-  },
-  {
-   "step": 650,
-   "loss": 0.0002264194336021319,
-   "lr": 7.868177136972194e-06,
-   "examples_per_second": 53.6668984102397
-  },
-  {
-   "step": 700,
-   "loss": 0.005762605927884579,
-   "lr": 6.838311019567456e-06,
-   "examples_per_second": 53.804158179759206
-  },
-  {
-   "step": 750,
-   "loss": 0.0006054344121366739,
-   "lr": 5.80844490216272e-06,
-   "examples_per_second": 53.967922321628656
-  },
-  {
-   "step": 800,
-   "loss": 0.00017190148355439305,
-   "lr": 4.778578784757981e-06,
-   "examples_per_second": 54.08137954215731
-  },
-  {
-   "step": 850,
-   "loss": 0.00017951311019714922,
-   "lr": 3.748712667353244e-06,
-   "examples_per_second": 54.2008385283932
-  },
-  {
-   "step": 900,
-   "loss": 0.0001402686320943758,
-   "lr": 2.7188465499485065e-06,
-   "examples_per_second": 54.29421142490242
-  },
-  {
-   "step": 950,
-   "loss": 0.00013488535478245467,
-   "lr": 1.6889804325437695e-06,
-   "examples_per_second": 54.43966793158304
-  },
-  {
-   "step": 1000,
-   "loss": 0.00016257414245046675,
-   "lr": 6.59114315139032e-07,
-   "examples_per_second": 54.5442409763224
-  }
- ],
- "_note": "Copied from outputs/, which is gitignored because it also holds model weights. The README's in-distribution table is computed from these values, so the result belongs in the committed artifact directory beside the out-of-distribution ones. Until this file existed, that table had nothing behind it on a clean checkout."
+  "_note": "Copied from outputs/, which is gitignored because it also holds model weights. The README's in-distribution table is computed from these values, so the result belongs in the committed artifact directory beside the out-of-distribution ones. Regenerated on the v0.2-min corpus: the previous file was measured on a corpus generated without a chat template, so every model in the roster was prompted as a base model."
 }

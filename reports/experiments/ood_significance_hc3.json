@@ -1,15 +1,15 @@
 {
-  "observed_difference": 0.2269,
+  "observed_difference": 0.1541,
   "ci95": [
-    0.2125,
-    0.2413
+    0.1422,
+    0.166
   ],
   "fraction_of_resamples_where_the_gap_reverses": 0.0,
   "resamples": 10000,
   "note": "paired: both arms are scored on the same resampled documents, because they score the same benchmark and their errors are correlated",
   "benchmark": "hc3",
   "auroc": {
-    "random": 0.6583,
-    "mirror": 0.8851
+    "random": 0.7963,
+    "mirror": 0.9504
   }
 }

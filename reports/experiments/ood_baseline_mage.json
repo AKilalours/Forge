@@ -2,28 +2,28 @@
   "arm": "baseline",
   "benchmark": "mage",
   "experiment": "forge_min_baseline",
-  "code_commit": "d090c9b1d3b03d70f74ffc5a5323bf2809a4126d",
-  "dataset_version": "v0.1-min",
+  "code_commit": "8e06099f3cbcb00e7cdac81e86be0e96191fbd57",
+  "dataset_version": "v0.2-min",
   "n_documents": 4000,
   "n_human": 2000,
   "n_ai": 2000,
   "n_windows": 4935,
   "fpr_budget": 0.001,
   "deployed": {
-    "threshold": 0.996956,
+    "threshold": 0.996586,
     "source": "fit on this arm's validation split; the operating point a user gets",
-    "fpr": 0.0085,
-    "fnr": 0.961
+    "fpr": 0.0005,
+    "fnr": 0.9705
   },
   "refit_on_benchmark": {
-    "threshold": 0.9995734095573426,
+    "threshold": 0.9796661734580995,
     "source": "re-fit on this benchmark. OPTIMISTIC: not available at deployment",
     "fpr": 0.001,
-    "fnr": 0.9825
+    "fnr": 0.958
   },
-  "auroc_mean_pooled": 0.58767425,
-  "auroc_max_pooled": 0.58842325,
-  "ece": 0.44101647617801676,
+  "auroc_mean_pooled": 0.59657975,
+  "auroc_max_pooled": 0.5969655,
+  "ece": 0.46264234379634284,
   "aggregation": "mean over windows; max reported alongside because it inflates FPR",
-  "seconds": 57.5
+  "seconds": 151.8
 }

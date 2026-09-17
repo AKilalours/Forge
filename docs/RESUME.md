@@ -1,71 +1,84 @@
-# Where this is, and exactly what to do next
+# Where this is, and what is left
 
-Written mid-session on 2026-09-17 so the work survives a dropped conversation.
-Everything here is state that was verified, not remembered.
+Updated 2026-09-17 after the regeneration, retraining and evaluation were finished.
 
-## What happened tonight, in one paragraph
+## What happened
 
-Every committed evaluation artifact was produced at commit `d090c9b1`, whose
-`VLLMGenerator` sent raw prompts to instruction-tuned models with no chat template. The
-models were continuing text rather than following instructions: 34% acceptance, 169 of
-565 attempts empty. That means the published AUROC of 0.999974 and every OOD number
-describe a detector trained against base-mode continuations. The fix, the regenerated
-corpus and the reruns are what the rest of this file is about.
+Every evaluation artifact in this repository had been produced at commit `d090c9b1`, whose
+`VLLMGenerator` sent raw prompts to instruction-tuned models with no chat template. All four
+held-in families were being prompted as base models: they continued text instead of following
+instructions, a probe measured 34% acceptance with 169 of 565 attempts empty, and the
+surviving documents were continuations rather than answers. So the published AUROC and every
+out-of-distribution number described a detector trained against base-mode continuations.
 
-## State as of writing
+Fixed, both arms regenerated as dataset v0.2-min, both retrained, everything re-evaluated.
 
-- repo at `91a203d`, all pushed to `origin/master`
-- corpus **v0.2-min** regenerated with the chat template and the words prompt:
-  - `data/silver/random` 19,992 docs, `random_v2` only (phi 5055, falcon 5045, qwen 4992, smollm 4900)
-  - `data/silver/mirrors` 19,736 docs, `mirror_v2` only (phi 5113, smollm 4971, falcon 4880, qwen 4772)
-  - no cross-contamination, checked with pyarrow
-- `ai_cap: 19736` in all three arm configs, the smaller arm's count
-- AI median 296 words against the human corpus's 257; handled at load time by
-  `ai_reference: human`, which resamples the AI pool to the human length histogram
-- W&B works: project `akilalourdes-student/forge`
-- **transformers must be `>=4.40,<5`**. `pip install vllm` pulls 5.17, which makes token
-  labels all `ignore_index`, the token loss reduce over zero elements, and training die
-  with a NaN misattributed to fp16. Downgrade AFTER generation, BEFORE training.
+## The result
 
-## The remaining sequence
+Two arms differing only in matching: same roster, same decoding grid, same validation band,
+same document budget, length-matched to the human corpus, arm isolation verified against the
+prompt version stamped on every document.
 
-On a pod with the corpus present:
+| benchmark | arm A random | arm B matched | gap | 95% CI | reversals / 10k | McNemar p |
+|---|---|---|---|---|---|---|
+| HC3 | 0.7963 | 0.9504 | +0.1541 | 0.1422 to 0.1660 | 0 | 7.3e-61 |
+| RAID | 0.7187 | 0.7871 | +0.0685 | 0.0582 to 0.0790 | 0 | 5.3e-73 |
+| MAGE | 0.5966 | 0.6124 | +0.0158 | 0.0035 to 0.0279 | 65 | 0.105 |
 
-```bash
-pip install "transformers>=4.40,<5"
-forge train --config configs/training/baseline_minimal.yaml 2>&1 | tee -a trainA.log
-forge train --config configs/training/mirror_minimal.yaml   2>&1 | tee -a trainB.log
-forge evaluate --config configs/training/baseline_minimal.yaml
-forge evaluate --config configs/training/mirror_minimal.yaml
-```
+Matched generation transfers on HC3 and RAID, decisively on both tests. MAGE is a null: the
+ranking gap is real but 0.016 and it does not reach the decisions. Both arms sit near chance
+there.
 
-Then, BEFORE stopping the pod, export. The container disk is 30 GB with no volume behind
-it and nothing on it survives termination:
+**The caveat that travels with all of it.** Even the winning arm misses 62% of AI documents on
+HC3 at its deployed threshold, and the control arm misses 99.8% on RAID. Ranking partially
+transfers across a domain shift. The operating point does not transfer at all.
 
-```bash
-hf upload Akilalourdes/forge-corpus-v0.2-min data/silver/random  random  --repo-type dataset --private
-hf upload Akilalourdes/forge-corpus-v0.2-min data/silver/mirrors mirrors --repo-type dataset --private
-hf upload Akilalourdes/forge-detect-weights  outputs             .       --repo-type model   --private
-```
+## Where the evidence lives
 
-Verify by downloading it back and counting files. An upload nobody read back is not a
-backup. The old corpus behind the published numbers is gone from every machine, which is
-why those numbers cannot be reproduced; do not repeat that.
+- `Akilalourdes/forge-corpus-v0.2-min` (private dataset): `random/` 19,992 docs, `mirrors/`
+  19,736 docs, plus a copy of `reports/`
+- `Akilalourdes/forge-detect-weights` (private model): both checkpoints, both run summaries
+- `reports/experiments/` in this repo: all artifacts, committed
+- W&B: `akilalourdes-student/forge`, runs `ms2oreiz` (arm A) and `97c519m6` (arm B)
 
-## Then, in the repo
+## Traps, recorded because each one cost real time
 
-1. Copy the new run records and eval artifacts into `reports/experiments/`.
-2. Update every README table from those artifacts, not from memory.
-3. `python scripts/check_readme_claims.py` must pass. It compares each published number
-   against its artifact and it is the only reason the tables can be trusted.
-4. Add the W&B run URL to the README, which unskips `test_tracking_record.py`.
-5. State the two limitations beside the headline figures rather than under them:
-   - the generator roster is 1.7B to 3.8B, so absolute FPR and FNR look better than a
-     frontier-scale roster would give (this is already written in
-     `configs/generation/generators_minimal.yaml` and predates tonight)
-   - AI text ran 15% longer at the median than the human corpus before length matching
+**transformers must be `>=4.40,<5`.** `pip install vllm` pulls 5.17, which makes the
+tokenizer return no usable offsets, every token label becomes `ignore_index`, the token loss
+reduces over zero elements, and training dies with a NaN that the error message blamed on
+fp16 precision. Install the `train` extra without vLLM for training and evaluation; install
+vLLM only for generation, and downgrade afterwards.
 
-## Do not ship the current README
+**The evaluation needs the `data` extra.** `pip install -e ".[dev,serve,train]"` is not
+enough; RAID, MAGE and HC3 all load through `datasets`.
 
-Until step 3 passes on the regenerated artifacts, the headline tables describe the old
-broken corpus. That is the single most important line in this file.
+**`scripts/eval_all.sh` is idempotent per cell.** It skips any cell whose JSON already
+exists, so old artifacts must be deleted before a rerun or it will report "already done" and
+leave the previous corpus's numbers in place looking freshly generated.
+
+**The adversarial lab is CPU-only.** `forge.inference.scorer` has no device handling, so
+`forge evaluate` never touches the GPU. Run it on a laptop, not a rented card.
+
+**RunPod containers have no volume.** 30 GB of container disk, destroyed on termination.
+Export to HuggingFace before stopping, and read it back before believing it.
+
+## Open
+
+1. **Adversarial lab.** `forge evaluate` for both arms. CPU-only, free, nothing waits on it.
+2. **`tier1_comparison.json`.** Marked superseded. Its `length_confound_removed` block was
+   measured on v0.1-min and needs re-running on v0.2-min with `scripts/length_gate.py`.
+3. **Serving weights.** The Streamlit demo pulls from `forge-detect-weights` and the
+   checkpoints there are 2.21 GB because they carry optimizer state. Strip a model-only copy,
+   around 740 MB, or the free tier cannot load it.
+4. **Beam.** Named in the target role, not started. CPU, free, 4 to 6 hours.
+5. **CUDA kernel.** The profiler found `aten::scatter_add_` at 20.87% of device time against
+   4.47% for all GEMMs combined, three independent measurements agreeing. That is the
+   motivated target: measured baseline, named bottleneck, reportable delta. 15 to 25 hours and
+   it needs a GPU throughout.
+6. **Generation at scale.** 20,000 documents took 27 minutes on one L40S. A 100,000-document
+   run plus a multi-GPU sharding measurement costs about $20 and turns an extrapolation into a
+   measurement.
+7. **Image side.** Still a third-party baseline with an operating point fitted in sample on 29
+   images, which the README states. `src/forge/image/` has the full two-arm pipeline written
+   and never run, and there is no image config and no CLI command, so it is two to three days
+   of work. Nothing in the target role asks for it.

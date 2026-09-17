@@ -14,7 +14,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Tests-1039%20passing-00C853?style=for-the-badge"/>
-  <img src="https://img.shields.io/badge/In--distribution%20AUROC-0.99997-00C853?style=for-the-badge"/>
+  <img src="https://img.shields.io/badge/In--distribution%20AUROC-0.99999-00C853?style=for-the-badge"/>
   <img src="https://img.shields.io/badge/FPR%20budget-0.1%25-0056D2?style=for-the-badge"/>
   <img src="https://img.shields.io/badge/Headline-Partial%20null%20result-FF8F00?style=for-the-badge"/>
 </p>
@@ -68,56 +68,118 @@ anything.
 
 ## 📊 What Actually Happened
 
-### In distribution, the two arms are the same detector
+### In distribution, both arms saturate and neither number means much
 
 | Metric | Arm A · random | Arm B · mirrors |
 |---|---|---|
-| AUROC | 0.999974 | 0.999971 |
-| FNR at the 0.1% FPR budget | 0.719% | **0.430%** |
-| Expected calibration error | 0.004467 | **0.003713** |
-| Deployed threshold | 0.996956 | 0.992285 |
+| AUROC | 0.999989 | 0.999895 |
+| FNR at the 0.1% FPR budget | 0.183% | 6.061% |
+| Expected calibration error | 0.002552 | 0.004710 |
+| Deployed threshold | 0.996586 | 0.998252 |
 | Realised FPR | 0.0502% | 0.0502% |
 
-Both are essentially perfect on held-out data from their own distribution, which is exactly
-why in-distribution numbers are not evidence of anything.
+**These two columns are not a comparison.** Each arm is validated against its own AI
+source, so arm A is scored on random-synthetic text and arm B on matched mirrors, which are
+different test sets. Arm B's higher false-negative rate says mirror text is harder to
+detect than random synthetic text, which is what "matched mirrors are harder negatives"
+predicts, and it says nothing about which detector is better. The comparison happens in the
+next section, on data neither arm has seen.
 
-### Out of distribution, the picture splits three ways
+Both arms clear 0.9998 AUROC on their own held-out split. Human web text against four
+open-weight models between 1.7B and 3.8B is a wide gap, and a near-perfect score on it is
+close to the expected result rather than evidence of a strong detector.
+
+### Out of distribution, the mirror arm wins on every benchmark
 
 Every arm evaluated on 4,000 documents per benchmark, 2,000 human and 2,000 AI, at the
 threshold each arm actually deploys.
 
 | Benchmark | AUROC · A | AUROC · B | Miss rate · A | Miss rate · B | ECE · A | ECE · B |
 |---|---|---|---|---|---|---|
-| **HC3** | 0.658 | **0.885** | 94.0% | **62.9%** | 0.423 | **0.183** |
-| **RAID** | 0.779 | 0.776 | 82.5% | **78.0%** | 0.372 | 0.354 |
-| **MAGE** | 0.588 | 0.628 | 96.1% | 86.7% | 0.441 | 0.381 |
+| **HC3** | 0.796 | **0.950** | 87.5% | **62.2%** | 0.395 | **0.153** |
+| **RAID** | 0.719 | **0.787** | 99.8% | **79.5%** | 0.497 | **0.292** |
+| **MAGE** | 0.597 | **0.612** | 97.0% | **89.1%** | 0.463 | **0.387** |
 
-### The test that decides it
+Six comparisons, six in the same direction. Consistency across three benchmarks with
+different generators and different domains carries more weight than any single figure.
 
-AUROC compares rankings. A detector is deployed at an operating point. So each arm's
-threshold was re-fit to spend the **same** human false-positive budget, and McNemar's test
-run on the discordant pairs, because both arms score the *same documents* and their errors
-are correlated.
+### Is the gap real, or is it sampling noise
+
+Two tests, because they answer different questions. A paired bootstrap over 10,000
+resamples asks whether the *ranking* gap survives resampling; both arms are scored on the
+same resampled documents because their errors are correlated.
+
+| Benchmark | AUROC gap | 95% CI | resamples where the gap reverses |
+|---|---|---|---|
+| **HC3** | +0.1541 | 0.1422 to 0.1660 | **0 of 10,000** |
+| **RAID** | +0.0685 | 0.0582 to 0.0790 | **0 of 10,000** |
+| **MAGE** | +0.0158 | 0.0035 to 0.0279 | 65 of 10,000 |
+
+AUROC compares rankings, but a detector is deployed at an operating point. So each arm's
+threshold was re-fit to spend the **same** human false-positive budget and McNemar's test
+run on the discordant pairs.
 
 | Benchmark | B catches, A misses | A catches, B misses | χ² | p |
 |---|---|---|---|---|
-| **HC3** | **119** | 39 | 39.50 | 3.3 × 10⁻¹⁰ |
-| **RAID** | **122** | 9 | 95.76 | < 10⁻¹⁵ |
-| **MAGE** | 28 | 19 | 1.36 | **0.243** |
+| **HC3** | **527** | 122 | 251.49 | 7.3 × 10⁻⁶¹ |
+| **RAID** | **372** | 34 | 279.73 | 5.3 × 10⁻⁷³ |
+| **MAGE** | 64 | 46 | 2.63 | **0.105** |
 
-**The finding, stated honestly.** On HC3 the mirror arm is better by every measure. On RAID
-the two arms have *identical AUROC*, and the sign of that difference reverses in **72.7% of
-10,000 paired bootstrap resamples**, yet at a matched budget the mirror arm catches 122
-documents the control misses against 9 the other way. Mirroring moved the low-false-positive
-tail without moving the ranking. On MAGE it did nothing at all.
+**The finding, stated honestly.** On HC3 and RAID the mirror arm is better by every measure
+and both tests agree decisively. On RAID, the benchmark where the two arms used to be
+indistinguishable, the sign of the AUROC gap now reverses in **0.0% of 10,000 paired
+bootstrap resamples**, and where the arms disagree at a matched budget the mirror arm is
+right 11 times as often. On HC3 it is right 4.3 times as often. Matched generation
+transfers.
+
+On MAGE the two tests disagree, and the disagreement is the honest answer. The bootstrap
+says the ranking gap is real but 0.016. McNemar says it does not reach the decisions,
+p = 0.105. Both arms sit near chance at 0.60. The sentence is that both arms fail on MAGE
+and the mirror arm fails imperceptibly less.
 
 ### The limitation, in the same breath
 
-> Neither arm is deployable out of distribution. Against unseen generators both miss
-> **63% to 96%** of AI text at their deployed threshold, and calibration collapses from
-> ECE 0.004 in distribution to **0.18 – 0.44** outside it. A confident score from this
-> system is not evidence of a confident model. The live demo will show you this if you
-> paste in ChatGPT output, and the page says so rather than hiding it.
+> **Neither arm is deployable out of distribution, and the winning arm is not close.**
+> Against unseen generators the mirror arm still misses **62% to 89%** of AI text at its
+> deployed threshold, and the control arm misses up to **99.8%**. Calibration collapses from
+> ECE 0.003 in distribution to **0.15 – 0.46** outside it.
+>
+> Read those two rows together and they say something more specific than "it gets worse".
+> An AUROC of 0.950 on HC3 means the model can still *rank* those documents well. A 62%
+> miss rate at the deployed threshold means the operating point calibrated in distribution
+> is worthless outside it. **Ranking partially transfers. The threshold does not transfer at
+> all.** Any deployment across a domain shift has to re-fit its threshold on the new domain,
+> and this system gives you no way to know when it has crossed one.
+>
+> A confident score from this system is not evidence of a confident model. The live demo
+> will show you this if you paste in ChatGPT output, and the page says so rather than hiding
+> it.
+
+### Two conditions that bound every number above
+
+> **The generator roster is small.** Four instruction-tuned models between 1.7B and 3.8B,
+> chosen so Phase 2 fits in 1.5 GPU-hours instead of 22. Smaller models produce more
+> detectable text, so absolute FPR and FNR are optimistic relative to a 7B-to-70B roster.
+> The comparison *between* arms is unaffected, because both arms draw the same roster.
+>
+> **The AI half ran longer than the human half before length matching.** Measured on the
+> v0.2-min corpus: a median of 296 words against the human corpus's 257. Both arms pass
+> through the identical validator, so the arm comparison was never at risk, but an unmatched
+> AI pool would let the detector learn length instead of learning AI. `ai_reference: human`
+> resamples each arm's AI pool so its word-count histogram tracks the human corpus before
+> training.
+
+### Both training runs are tracked, and the link is backed by an artifact
+
+| Arm | W&B run | AUROC | run record |
+|---|---|---|---|
+| A · random | [`ms2oreiz`](https://wandb.ai/akilalourdes-student/forge/runs/ms2oreiz) | 0.999989 | `reports/experiments/indist_baseline.json` |
+| B · mirrors | [`97c519m6`](https://wandb.ai/akilalourdes-student/forge/runs/97c519m6) | 0.999895 | `reports/experiments/indist_mirror.json` |
+
+Pasting a dashboard link into a README is a claim anybody can make. Each run record here
+carries its own `tracking.run_url`, alongside the `code_commit` and `dataset_version` that
+produced it, and `test_the_readme_only_links_a_wandb_run_that_a_record_carries` fails the
+build if the README links a run no committed artifact backs.
 
 ---
 

@@ -1,15 +1,15 @@
 {
-  "observed_difference": -0.0028,
+  "observed_difference": 0.0685,
   "ci95": [
-    -0.0116,
-    0.0061
+    0.0582,
+    0.079
   ],
-  "fraction_of_resamples_where_the_gap_reverses": 0.727,
+  "fraction_of_resamples_where_the_gap_reverses": 0.0,
   "resamples": 10000,
   "note": "paired: both arms are scored on the same resampled documents, because they score the same benchmark and their errors are correlated",
   "benchmark": "raid",
   "auroc": {
-    "random": 0.7792,
-    "mirror": 0.7764
+    "random": 0.7187,
+    "mirror": 0.7871
   }
 }

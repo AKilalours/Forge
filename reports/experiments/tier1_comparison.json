@@ -64,5 +64,11 @@
     "verdict": "UNDERPOWERED. The 40% relative reduction rests on 9 misses versus 15. This validation split cannot resolve a difference this size."
   },
   "in_distribution_only": true,
-  "caveat": "AUROC 0.99997 on both arms means the validation split is saturated: the detector is scoring text from the same four generator families it trained on. The discriminating test is held-out generators (RAID, MAGE, HC3), which has not run."
+  "caveat": "AUROC 0.99997 on both arms means the validation split is saturated: the detector is scoring text from the same four generator families it trained on. The discriminating test is held-out generators (RAID, MAGE, HC3), which has not run.",
+  "superseded": {
+    "status": "SUPERSEDED for the arm result, still valid for the length-confound measurement",
+    "why": "Every number in `result` was measured on dataset v0.1-min, whose AI half was generated without a chat template: the four instruction-tuned families in the roster were prompted as base models, so a third of generations came back empty and the survivors were continuations rather than answers. The corpus was regenerated as v0.2-min and both arms retrained. The current in-distribution result is in indist_baseline.json and indist_mirror.json; the out-of-distribution comparison, which is the one that answers the research question, is in ood_*.json with paired bootstraps in ood_significance_*.json and the matched-budget test in ood_mcnemar.json.",
+    "what_is_still_valid": "`length_confound_removed` measures how much AUROC is obtainable from document length alone, and the chat-template defect does not change what that experiment measured on the corpus it ran against. It has NOT been re-measured on v0.2-min.",
+    "to_supersede_this_file": "scripts/length_gate.py, re-run against the v0.2-min corpus"
+  }
 }
