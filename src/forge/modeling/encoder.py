@@ -77,6 +77,32 @@ def build_model(config: ForgeConfig):  # pragma: no cover - needs torch
                 ce = nn.CrossEntropyLoss()
                 loss = self.cfg.doc_loss_weight * ce(doc_logits, doc_labels)
                 if token_labels is not None and self.cfg.token_loss_weight > 0:
+                    # A BATCH WHERE EVERY TOKEN LABEL IS IGNORED IS NOT A ZERO LOSS, IT IS
+                    # A NAN. CrossEntropyLoss reduces by mean, so with every position set
+                    # to ignore_index the denominator is zero and the loss comes back NaN
+                    # with no warning of any kind. The training loop then raises
+                    # "non-finite loss at step 1. With DeBERTa-v3 this is usually fp16
+                    # overflow", which is a canned hint that was wrong: the run was bf16,
+                    # which has fp32's exponent range and does not overflow that way. An
+                    # error that names a plausible wrong cause costs more than one that
+                    # says only that something is wrong.
+                    #
+                    # Token labels come from character spans mapped through the
+                    # tokenizer's offset mapping. They come back empty when the tokenizer
+                    # returns no usable offsets, which is what a transformers major
+                    # version bump can quietly change. So the condition is checked where
+                    # it is known, and the message says which of the two it is.
+                    valid = (token_labels != -100).sum()
+                    if valid == 0:
+                        raise RuntimeError(
+                            "every token label in this batch is ignore_index. The token "
+                            "head would reduce over zero elements and return NaN, which "
+                            "surfaces later as a non-finite loss blamed on precision. "
+                            "Token labels are built from character spans through the "
+                            "tokenizer's offset mapping; check the tokenizer version and "
+                            "that the spans are non-empty. Set token_loss_weight to 0.0 "
+                            "to train the document head alone."
+                        )
                     tce = nn.CrossEntropyLoss(ignore_index=-100)
                     loss = loss + self.cfg.token_loss_weight * tce(
                         token_logits.reshape(-1, N_TOKEN_CLASSES), token_labels.reshape(-1)

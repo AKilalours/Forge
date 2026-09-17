@@ -466,9 +466,26 @@ def run(config: dict | str, smoke: bool = False, resume: str | None = None) -> d
                             batch["doc_labels"], batch["token_labels"])
                 loss = out["loss"] / accum
             if not torch.isfinite(loss):
+                # THE MESSAGE USED TO NAME ONE CAUSE AND IT WAS THE WRONG ONE. It said
+                # "usually fp16 overflow in disentangled attention; use bf16 or fp32" on
+                # a run that was already bf16, which has fp32's exponent range and does
+                # not overflow that way. The real cause was a batch whose token labels
+                # were all ignore_index, reducing over zero elements. A confident wrong
+                # diagnosis is worse than none: it sends the reader to the setting that
+                # is already correct. The precision actually in use is reported, and the
+                # fp16 hypothesis is offered only when fp16 is actually running.
+                hint = (
+                    "fp16 overflow in DeBERTa-v3's disentangled attention is the usual "
+                    "cause at this precision; try bf16 or fp32."
+                    if precision == "fp16"
+                    else "precision is not the usual cause at this setting. Check the "
+                         "batch: an all-ignore_index token-label tensor reduces over zero "
+                         "elements and yields NaN, and a corrupt or empty example does "
+                         "the same."
+                )
                 raise RuntimeError(
-                    f"non-finite loss at step {state.global_step}. With DeBERTa-v3 this is "
-                    "usually fp16 overflow in disentangled attention; use bf16 or fp32."
+                    f"non-finite loss at step {state.global_step} (precision={precision}, "
+                    f"amp={'on' if use_amp else 'off'}). {hint}"
                 )
             scaler.scale(loss).backward() if scaler.is_enabled() else loss.backward()
 
