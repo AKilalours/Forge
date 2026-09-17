@@ -436,7 +436,20 @@ _TARGET_RE = None
 
 
 def _target_from_prompt(prompt: str, default: int = 300) -> int:
+    """Read the length target back out of a rendered prompt.
+
+    BOTH SPELLINGS, and the reason is a small lesson. This matched "approximately N
+    tokens" only. When the prompts were corrected to say "words", which is the unit
+    everything else in the pipeline actually measures, this silently stopped matching and
+    fell through to the 300-word default. The fake generator then wrote 300 words against
+    every target, and one mirror test went from passing to rejecting all 18 documents as
+    too_long. A one-word change to a prompt broke a regex two modules away that nobody
+    would have thought to look at.
+
+    mirror_v1 is frozen and still says tokens, so documents stamped with it must keep
+    parsing. Both spellings are accepted rather than one being swapped for the other.
+    """
     import re as _re
 
-    m = _re.search(r"approximately (\d+) tokens", prompt)
+    m = _re.search(r"approximately (\d+) (?:words|tokens)", prompt)
     return int(m.group(1)) if m else default

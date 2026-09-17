@@ -263,3 +263,69 @@ def test_fake_backend_is_labelled_in_the_record():
     res = generate_mirrors(_humans(3), gcfg, mcfg, backend="fake")
     assert all(d.mirror.attributes["backend"] == "fake" for d in res.docs)
     assert all(d.generator.revision == "fake" for d in res.docs)
+
+
+# --------------------------------- the length instruction must be in the unit we measure
+
+def test_the_active_mirror_prompt_asks_for_words_not_tokens():
+    """The prompt said tokens; everything else in the pipeline means words.
+
+    approx_token_count is len(text.split()), the extractor's target_tokens is a word
+    count, and the validator's ratio divides words by that word target. Only the prompt
+    said "tokens", so every model was told to hit a number in a unit nobody measured, and
+    each one missed it differently: three families ran long and Qwen2.5-3B ran short
+    enough to fail two thirds of its first attempts.
+
+    Naming the unit correctly is right whether or not it fixes the yield. What it must
+    not do is quietly revert.
+    """
+    from forge.common.config import load
+
+    cfg = load("configs/generation/mirror_minimal.yaml")
+    tpl = load_template(cfg["prompt_path"])
+    assert "{target_tokens} words" in tpl
+    assert "tokens." not in tpl, "the length instruction is back in the wrong unit"
+
+
+def test_the_control_arm_prompt_asks_for_words_too():
+    """Both arms or neither. A unit that differs between arms is another arm difference."""
+    from forge.generation.random_synthetic import PROMPT
+
+    assert "{target_tokens} words" in PROMPT
+    assert "tokens." not in PROMPT
+
+
+def test_the_frozen_v1_prompt_is_kept_rather_than_edited():
+    """data_spec_v1: mirror_v1 is frozen, so a wording change is v2, not an edit to v1.
+
+    Keeping the file means a document stamped mirror_v1 can still be read against the
+    exact text that produced it.
+    """
+    import pathlib
+
+    v1 = pathlib.Path("src/forge/generation/prompts/mirror_v1.txt")
+    assert v1.exists(), "the frozen v1 prompt was deleted rather than superseded"
+    assert "{target_tokens} tokens" in v1.read_text(), "v1 was edited in place"
+
+
+def test_the_config_and_the_prompt_file_agree_on_the_version():
+    from forge.common.config import load
+
+    cfg = load("configs/generation/mirror_minimal.yaml")
+    assert cfg["prompt_version"] == "mirror_v2"
+    assert "mirror_v2" in cfg["prompt_path"]
+
+
+def test_the_fake_generator_reads_the_target_in_either_unit():
+    """The regression that caught the prompt change, pinned in both directions.
+
+    _target_from_prompt matched "approximately N tokens" only. Correcting the prompts to
+    say "words" made it miss, fall back to a 300-word default, and write 300 words
+    against every target. The visible symptom was a mirror test rejecting all 18 of its
+    documents as too_long, two modules away from the line that changed.
+    """
+    from forge.generation.generators.base import _target_from_prompt
+
+    assert _target_from_prompt("- Length: approximately 275 words.") == 275
+    assert _target_from_prompt("- Length: approximately 275 tokens.") == 275
+    assert _target_from_prompt("no target here at all") == 300

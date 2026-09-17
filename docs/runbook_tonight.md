@@ -41,8 +41,8 @@ for root in ("data/silver/mirrors", "data/silver/random"):
 PY
 ```
 
-`data/silver/mirrors` must report `mirror_v1` only, `data/silver/random` must report
-`random_v1` only. If either shows both, stop: the arms are contaminated and any comparison
+`data/silver/mirrors` must report `mirror_v2` only, `data/silver/random` must report
+`random_v2` only. If either shows both, stop: the arms are contaminated and any comparison
 between them is meaningless.
 
 ---

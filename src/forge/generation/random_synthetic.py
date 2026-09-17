@@ -69,7 +69,7 @@ REGISTERS = ["informational", "formal", "conversational"]
 
 PROMPT = """Write a {genre} in a {register} register about {topic}.
 
-- Length: approximately {target_tokens} tokens.
+- Length: approximately {target_tokens} words.
 - Write continuous prose unless the genre calls for another shape.
 
 Output only the text itself. Do not add a preamble, a title line, a sign-off, or any
@@ -280,7 +280,7 @@ def generate_random(
                 max_new_tokens=d.max_new_tokens, seed=d.seed,
             ),
             mirror=MirrorSpec(
-                prompt_version="random_v1", target_tokens=spec.target_tokens,
+                prompt_version="random_v2", target_tokens=spec.target_tokens,
                 # Explicitly false. This is the control: nothing is matched.
                 topic_match=False, length_match=False, style_match=False,
                 attributes={"topic": spec.topic, "genre": spec.genre,

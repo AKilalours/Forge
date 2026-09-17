@@ -1,6 +1,6 @@
 spec_version: data_spec_v1
-prompt_version: mirror_v1
-prompt_path: src/forge/generation/prompts/mirror_v1.txt
+prompt_version: mirror_v2
+prompt_path: src/forge/generation/prompts/mirror_v2.txt
 
 target: 400000            # one mirror per training human document
 assignment: round_robin   # over held_in families only

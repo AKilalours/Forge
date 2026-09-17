@@ -45,7 +45,7 @@ mining:
   sampling: proportional_to_cluster_size
 
 data:
-  dataset_version: v0.1-min
+  dataset_version: v0.2-min
   # IDENTICAL to baseline_minimal.yaml and mirror_minimal.yaml. See the note above: these
   # are not arm C's own budget, they are the shared budget, and arm C spends it differently.
   ai_cap: 20000

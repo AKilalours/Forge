@@ -12,7 +12,7 @@ paths:
   out: outputs
 
 data:
-  dataset_version: v0.1-min
+  dataset_version: v0.2-min
   # EQUAL BUDGET. Each arm's validator rejects at its own rate, so generation yields
   # different accepted counts. Set this to the SMALLER arm's count, identically in every
   # arm's config, before training. Left null the comparison measures data volume as much

@@ -1,6 +1,6 @@
 spec_version: data_spec_v1
-prompt_version: mirror_v1
-prompt_path: src/forge/generation/prompts/mirror_v1.txt
+prompt_version: mirror_v2
+prompt_path: src/forge/generation/prompts/mirror_v2.txt
 generators_config: configs/minimal/generators.yaml
 
 target: 60000

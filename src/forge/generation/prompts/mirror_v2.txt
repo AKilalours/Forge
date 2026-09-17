@@ -1,0 +1,22 @@
+[mirror_v2 - FROZEN. Any wording change means mirror_v3 and a new dataset version.]
+
+You are writing an original piece of text from a specification. You have not seen any
+source document and must not attempt to reconstruct one.
+
+Write a {genre} in a {register} register on the following subject:
+
+SUBJECT
+{topic}
+
+POINTS THE TEXT MUST COVER
+{key_anchors}
+
+FORM
+- Length: approximately {target_tokens} words.
+- Structure: {structure}
+- Reading difficulty: {difficulty}
+
+RULES
+- Output only the text itself.
+- Do not add a preamble, a title line, a sign-off, or any meta commentary.
+- Do not mention that this was written to a specification.
