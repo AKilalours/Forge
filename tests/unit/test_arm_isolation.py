@@ -134,3 +134,70 @@ def test_an_unknown_arm_name_does_not_silently_pass_everything():
     from forge.training.data import ARM_PROMPT_FAMILY
 
     assert set(ARM_PROMPT_FAMILY) == {"random", "mirror", "hard_negative"}
+
+
+# ---------------------------------------------------------------------------
+# THE PARTITION-KEY COLLISION, and why it is this repository's own doing.
+#
+# forge.ingestion.writer partitions as source=<x>/split=<y>/ AND writes physical `source`
+# and `split` columns into every file. pq.read_table applies hive partitioning discovery to
+# the path it is handed, so one shard offers two definitions of `source`: a string column
+# from the file and a dictionary-encoded one inferred from the directory. Older pyarrow
+# refuses to merge them:
+#
+#   ArrowTypeError: Unable to merge: Field source has incompatible types:
+#   string vs dictionary<values=string, indices=int32, ordered=0>
+#
+# It surfaced when a command was run outside the project venv, against an older pyarrow,
+# while the identical call kept working on 25.0.1 inside it. That is not a fixed bug, it is
+# a fixed dependency on a version, and it sat at the first line of every training and
+# evaluation run that loads the human corpus.
+# ---------------------------------------------------------------------------
+
+
+def test_a_shard_whose_column_name_matches_its_partition_key_still_loads(tmp_path) -> None:
+    """The exact layout the writer produces. Reading one named file must not consult the
+    directory it happens to sit in."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    from forge.training.data import load_examples
+
+    part = tmp_path / "source=fw" / "split=test"
+    part.mkdir(parents=True)
+    pq.write_table(
+        pa.table({
+            "doc_id": ["d1", "d2"],
+            "source_group_id": ["g1", "g2"],
+            "text": ["human one", "human two"],
+            "split": ["test", "test"],
+            "domain": ["news", "news"],
+            # The collision: a physical column with the same name as the partition key.
+            "source": ["fw", "fw"],
+        }),
+        part / "part-000.parquet",
+    )
+
+    rows = load_examples(human_root=str(tmp_path), splits=("test",))
+    assert [r.doc_id for r in rows] == ["d1", "d2"]
+    assert all(r.label == 0 for r in rows)
+
+
+def test_the_reader_does_not_infer_columns_from_the_path(tmp_path) -> None:
+    """Stated directly against the helper, because the guarantee is that the path is not an
+    input to the schema, and a loader test could pass for other reasons."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    from forge.training.data import _read_rows
+
+    part = tmp_path / "source=fw" / "split=test"
+    part.mkdir(parents=True)
+    pq.write_table(pa.table({"doc_id": ["d1"], "source": ["written-in-the-file"]}),
+                   part / "part-000.parquet")
+
+    rows = _read_rows(str(part / "part-000.parquet"), None)
+    assert rows == [{"doc_id": "d1", "source": "written-in-the-file"}], (
+        "the value must come from the file, and no partition columns may be invented "
+        "from the directory names"
+    )

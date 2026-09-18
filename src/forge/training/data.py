@@ -93,6 +93,33 @@ def check_arm_versions(expect_arm: str, seen_versions: set[str], ai_root) -> Non
         )
 
 
+def _read_rows(path: str, columns: list[str] | None) -> list[dict]:
+    """Read one shard WITHOUT letting parquet infer anything from its path.
+
+    THE COLLISION THIS AVOIDS, and it is built into this repository's own layout.
+    forge.ingestion.writer partitions the corpus as source=<x>/split=<y>/, and it also
+    writes physical `source` and `split` COLUMNS into every file. pq.read_table applies
+    hive partitioning discovery to the path it is given, so the same shard offers two
+    definitions of `source`: a string column from the file and a dictionary-encoded column
+    inferred from the directory name. Whether that is merged silently or raises
+
+        ArrowTypeError: Unable to merge: Field source has incompatible types:
+        string vs dictionary<values=string, indices=int32, ordered=0>
+
+    depends on the pyarrow version, which means this code was one environment away from
+    failing at the first line of every training and evaluation run. It surfaced when a
+    command was run outside the project venv, against an older pyarrow, and the same call
+    had been working in the venv on 25.0.1.
+
+    A loader reading ONE named file does not want partition discovery at all. ParquetFile
+    reads exactly the columns in the file and infers nothing, so the path stops being an
+    input to the schema. forge.hard_negative.scan_core._rows_from_files already reads
+    parquet this way, for the unrelated reason that iter_batches bounds memory; this makes
+    the two readers agree.
+    """
+    return pq.ParquetFile(path).read(columns=columns).to_pylist()
+
+
 def load_examples(
     human_root: str | Path | None = None,
     ai_root: str | Path | None = None,
@@ -134,9 +161,9 @@ def load_examples(
         from forge.ingestion.writer import PARTITION_GLOB
 
         for f in sorted(glob.glob(str(Path(human_root) / PARTITION_GLOB))):
-            for r in pq.read_table(
-                f, columns=["doc_id", "source_group_id", "text", "split", "domain"]
-            ).to_pylist():
+            for r in _read_rows(
+                f, ["doc_id", "source_group_id", "text", "split", "domain"]
+            ):
                 if r["split"] not in splits:
                     continue
                 human_rows.append(RawExample(r["doc_id"], r["source_group_id"], r["split"],
@@ -145,10 +172,10 @@ def load_examples(
     if ai_root:
         seen_versions: set[str] = set()
         for f in sorted(glob.glob(str(Path(ai_root) / "split=*/*.parquet"))):
-            for r in pq.read_table(
-                f, columns=["sample_id", "source_group_id", "text", "split", "domain",
-                            "generator", "mirror"]
-            ).to_pylist():
+            for r in _read_rows(
+                f, ["sample_id", "source_group_id", "text", "split", "domain",
+                    "generator", "mirror"]
+            ):
                 if r["split"] not in splits:
                     continue
                 g = r.get("generator") or {}
@@ -162,7 +189,7 @@ def load_examples(
 
     if mixed_root:
         for f in sorted(glob.glob(str(Path(mixed_root) / "split=*/*.parquet"))):
-            for r in pq.read_table(f).to_pylist():
+            for r in _read_rows(f, None):
                 if r["split"] not in splits:
                     continue
                 spans = [(s["start_char"], s["end_char"], s["label"]) for s in r["spans"]]
