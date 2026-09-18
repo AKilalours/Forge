@@ -243,10 +243,9 @@ def test_preprocessing_defends_against_zero_width_and_the_lab_shows_it():
     nothing, because strip_invisible() removes it. Reporting only one column would either
     credit normalize() to the model or describe a threat production already handles.
     """
-    from forge.adversarial.lab import run_attacks
 
     texts, ids = _corpus()
-    res = [r for r in run_attacks(texts, ids, CharacterSensitiveDetector(), 0.5,
+    res = [r for r in _results(texts, ids, CharacterSensitiveDetector(), 0.5,
                                   attacks=["zero_width_insert"])][0]
     assert res.delta_raw > 0.5, "the attack must work against a raw input path"
     assert abs(res.delta_preprocessed) < 1e-9, "and be fully defused by preprocessing"
@@ -254,10 +253,9 @@ def test_preprocessing_defends_against_zero_width_and_the_lab_shows_it():
 
 
 def test_homoglyphs_defeat_preprocessing_and_the_lab_shows_that_too():
-    from forge.adversarial.lab import run_attacks
 
     texts, ids = _corpus()
-    res = [r for r in run_attacks(texts, ids, CharacterSensitiveDetector(), 0.5,
+    res = [r for r in _results(texts, ids, CharacterSensitiveDetector(), 0.5,
                                   attacks=["homoglyph_substitute"])
            if r.severity == 0.20][0]
     assert res.delta_preprocessed > 0.5, "NFKC does not remove Cyrillic look-alikes"
@@ -265,19 +263,18 @@ def test_homoglyphs_defeat_preprocessing_and_the_lab_shows_that_too():
 
 
 def test_noops_are_excluded_from_the_score_not_counted_as_defences():
-    from forge.adversarial.lab import run_attacks
 
     bare = ["Zzz qqq wwww. Zzz qqq wwww. Zzz qqq wwww."] * 10
-    res = run_attacks(bare, [f"d{i}" for i in range(10)], CharacterSensitiveDetector(), 0.5,
+    res = _results(bare, [f"d{i}" for i in range(10)], CharacterSensitiveDetector(), 0.5,
                       attacks=["synonym_swap"])
     assert all(r.n_noop == 10 and r.n_scored == 0 for r in res)
 
 
 def test_table_renders_worst_attack_first():
-    from forge.adversarial.lab import render_table, run_attacks
+    from forge.adversarial.lab import render_table
 
     texts, ids = _corpus()
-    res = run_attacks(texts, ids, CharacterSensitiveDetector(), 0.5,
+    res = _results(texts, ids, CharacterSensitiveDetector(), 0.5,
                       attacks=["zero_width_insert", "homoglyph_substitute"])
     table = render_table(res)
     assert "homoglyph_substitute" in table.split("\n")[2]
@@ -296,14 +293,22 @@ def test_table_renders_worst_attack_first():
 # ---------------------------------------------------------------------------
 
 
+def _results(*args, **kwargs):
+    """run_attacks returns (results, human_cost) now. This unwraps it for the tests that
+    are about the attack table, so the tuple change stays in one place and the tests about
+    the human cost ask for it explicitly."""
+    from forge.adversarial.lab import run_attacks
+
+    return run_attacks(*args, **kwargs)[0]
+
+
 def test_each_condition_gets_its_own_clean_baseline() -> None:
     """THE CONTROL. Without it, a transform that costs clean accuracy reports as a win:
     its attacked FNR falls toward the clean FNR it just raised, and the delta shrinks for
     the wrong reason."""
-    from forge.adversarial.lab import run_attacks
 
     texts, ids = _corpus()
-    res = run_attacks(texts, ids, CharacterSensitiveDetector(), 0.5,
+    res = _results(texts, ids, CharacterSensitiveDetector(), 0.5,
                       attacks=["homoglyph_substitute"],
                       conditions=("raw", "normalised", "folded"))
     for r in res:
@@ -318,10 +323,9 @@ def test_each_condition_gets_its_own_clean_baseline() -> None:
 def test_the_published_field_names_keep_their_old_meaning() -> None:
     """The artifact schema has always published fnr_raw, fnr_preprocessed and clean_fnr,
     and reports reference them. The conditions dict is additive, not a rename."""
-    from forge.adversarial.lab import run_attacks
 
     texts, ids = _corpus()
-    res = run_attacks(texts, ids, CharacterSensitiveDetector(), 0.5,
+    res = _results(texts, ids, CharacterSensitiveDetector(), 0.5,
                       attacks=["homoglyph_substitute"])
     for r in res:
         assert r.fnr_raw == r.fnr["raw"]
@@ -338,22 +342,20 @@ def test_the_production_condition_cannot_be_dropped_from_a_run() -> None:
     """Every published delta in this repository is stated against the normalised path. A
     run without it produces a table whose numbers have no relationship to the deployed
     system, and nothing downstream would notice."""
-    from forge.adversarial.lab import run_attacks
 
     texts, ids = _corpus()
     with pytest.raises(ValueError, match="production path"):
-        run_attacks(texts, ids, CharacterSensitiveDetector(), 0.5,
+        _results(texts, ids, CharacterSensitiveDetector(), 0.5,
                     attacks=["homoglyph_substitute"], conditions=("raw",))
 
 
 def test_an_unknown_condition_is_refused_before_any_scoring() -> None:
     """Scoring 500 documents through 17 attacks before discovering a typo is an hour of
     CPU for an error message."""
-    from forge.adversarial.lab import run_attacks
 
     texts, ids = _corpus()
     with pytest.raises(ValueError, match="unknown conditions"):
-        run_attacks(texts, ids, CharacterSensitiveDetector(), 0.5,
+        _results(texts, ids, CharacterSensitiveDetector(), 0.5,
                     attacks=["homoglyph_substitute"],
                     conditions=("normalised", "case_folded"))
 
@@ -361,11 +363,11 @@ def test_an_unknown_condition_is_refused_before_any_scoring() -> None:
 def test_the_default_run_scores_exactly_what_it_always_did() -> None:
     """Each extra condition rescores every cell and the clean baseline, so the default has
     to stay at two or the existing lab run silently doubles in cost."""
-    from forge.adversarial.lab import DEFAULT_CONDITIONS, run_attacks
+    from forge.adversarial.lab import DEFAULT_CONDITIONS
 
     assert DEFAULT_CONDITIONS == ("raw", "normalised")
     texts, ids = _corpus()
-    res = run_attacks(texts, ids, CharacterSensitiveDetector(), 0.5,
+    res = _results(texts, ids, CharacterSensitiveDetector(), 0.5,
                       attacks=["homoglyph_substitute"])
     assert all(set(r.fnr) == {"raw", "normalised"} for r in res)
 
@@ -373,12 +375,103 @@ def test_the_default_run_scores_exactly_what_it_always_did() -> None:
 def test_the_table_shows_clean_and_attacked_for_every_condition() -> None:
     """A defence that trades clean accuracy for attacked accuracy must not be able to
     look like a straight win in the rendered table."""
-    from forge.adversarial.lab import render_table, run_attacks
+    from forge.adversarial.lab import render_table
 
     texts, ids = _corpus()
-    res = run_attacks(texts, ids, CharacterSensitiveDetector(), 0.5,
+    res = _results(texts, ids, CharacterSensitiveDetector(), 0.5,
                       attacks=["homoglyph_substitute"],
                       conditions=("raw", "normalised", "folded"))
     header = render_table(res).split("\n")[0]
     for tag in ("raw.cln", "raw.atk", "normal.cln", "folded.cln", "folded.atk"):
         assert tag in header, f"{tag} missing from {header!r}"
+
+
+# ---------------------------------------------------------------------------
+# THE HOLE THE PER-CONDITION CLEAN BASELINE LEFT, found by running it on the real arm.
+#
+# The clean baseline scores clean AI documents, which catches a transform that stops the
+# detector recognising AI text. It is blind to the opposite failure, and the opposite
+# failure is the likely one. FNR is the fraction of AI documents scored BELOW threshold, so
+# a transform that pushes every score UP drives FNR to zero everywhere and reads as a
+# perfect, free defence.
+#
+# That is what the first casefolded run produced on forge_min_baseline@8e06099f: 0.000 in
+# every cell, clean and attacked, across all seventeen attack-severity pairs, including
+# case_perturb which sits at 0.978 raw. Seventeen perfect defences at no cost is a
+# measurement artefact, and this lab could not tell it from a real result because it only
+# ever scored AI documents. The cost of inflated scores lands on human documents.
+# ---------------------------------------------------------------------------
+
+
+class _ScoreInflatingDetector:
+    """Calls everything AI. The pathological case a FNR-only lab cannot see.
+
+    Against AI documents this scores a perfect zero FNR on every attack and every clean
+    baseline, which is indistinguishable from a perfect defence until human documents are
+    scored and the FPR comes back at 1.0.
+    """
+
+    def __call__(self, texts: list[str]) -> list[float]:
+        return [1.0] * len(texts)
+
+
+def test_a_score_inflating_transform_is_invisible_in_fnr_and_obvious_in_fpr() -> None:
+    from forge.adversarial.lab import run_attacks
+
+    texts, ids = _corpus()
+    results, cost = run_attacks(
+        texts, ids, _ScoreInflatingDetector(), 0.5,
+        attacks=["homoglyph_substitute"], human_texts=["a human sentence about weather."] * 5,
+    )
+    assert all(r.fnr[c] == 0.0 for r in results for c in r.fnr), (
+        "the premise: calling everything AI gives a perfect FNR on every condition"
+    )
+    assert all(v.fpr == 1.0 for v in cost.values()), (
+        "and the human column is what exposes it. Without this, the table above reads as "
+        "a flawless defence."
+    )
+
+
+def test_the_human_cost_is_measured_once_per_condition_not_per_attack() -> None:
+    """It is a property of the transform, not of the attack, so paying for it per cell
+    would multiply a fixed cost by seventeen."""
+    from forge.adversarial.lab import run_attacks
+
+    texts, ids = _corpus()
+    _, cost = run_attacks(texts, ids, CharacterSensitiveDetector(), 0.5,
+                          attacks=["homoglyph_substitute", "zero_width_insert"],
+                          conditions=("raw", "normalised", "folded"),
+                          human_texts=["plain human text here."] * 4)
+    assert set(cost) == {"raw", "normalised", "folded"}
+    assert all(v.n_human == 4 for v in cost.values())
+
+
+def test_a_run_without_human_documents_says_so_rather_than_reporting_nothing() -> None:
+    """A silent empty column is how the casefolded result nearly got published. The
+    absence has to be louder than the numbers it undermines."""
+    from forge.adversarial.lab import render_cost, run_attacks
+
+    texts, ids = _corpus()
+    _, cost = run_attacks(texts, ids, CharacterSensitiveDetector(), 0.5,
+                          attacks=["homoglyph_substitute"])
+    assert cost == {}
+    rendered = render_cost(cost)
+    assert "NO HUMAN DOCUMENTS SCORED" in rendered
+    assert "indistinguishable" in rendered
+
+
+def test_the_rendered_cost_names_every_condition_and_its_fpr() -> None:
+    from forge.adversarial.lab import render_cost, run_attacks
+
+    texts, ids = _corpus()
+    _, cost = run_attacks(texts, ids, CharacterSensitiveDetector(), 0.5,
+                          attacks=["homoglyph_substitute"],
+                          conditions=("raw", "normalised", "casefolded"),
+                          human_texts=["plain human text here."] * 3)
+    rendered = render_cost(cost)
+    for condition in ("raw", "normalised", "casefolded"):
+        assert condition in rendered
+    assert "operating point" in rendered, (
+        "the reading has to be stated: a rising FPR is a moved operating point, not a "
+        "defence"
+    )

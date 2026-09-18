@@ -284,7 +284,12 @@ def evaluate(
     """
     import json
 
-    from forge.adversarial.lab import DEFAULT_CONDITIONS, render_table, run_attacks
+    from forge.adversarial.lab import (
+        DEFAULT_CONDITIONS,
+        render_cost,
+        render_table,
+        run_attacks,
+    )
     from forge.inference.scorer import ArmUnavailable, load_arm
     from forge.training.data import load_examples
 
@@ -302,6 +307,10 @@ def evaluate(
         expect_arm=cfg_data["data"].get("arm"),
     )
     ai = [e for e in examples if e.label == 1][:limit]
+    # HUMAN DOCUMENTS ARE NOT OPTIONAL CONTEXT. FNR alone cannot separate a defence from a
+    # transform that inflates every score, and the cost of inflation lands here as false
+    # positives against a threshold fitted on untransformed text.
+    human = [e for e in examples if e.label == 0][:limit]
     if not ai:
         raise PhaseNotImplemented(
             f"no AI documents in the test split of {cfg_data['paths']['ai']}. The lab "
@@ -312,15 +321,23 @@ def evaluate(
         f"attacking {len(ai)} AI test documents with {loaded.policy.model_version} "
         f"at threshold {loaded.policy.threshold:.6f}"
     )
-    results = run_attacks(
+    if not human:
+        typer.echo(
+            "WARNING: no human documents in this split. Every number below is FNR on AI "
+            "documents, and a condition that inflates all scores will read as a perfect "
+            "defence. Treat any new condition as unmeasured."
+        )
+    results, cost = run_attacks(
         [e.text for e in ai], [e.doc_id for e in ai],
         score_fn=lambda texts: [loaded.score(t).mean for t in texts],
         threshold=loaded.policy.threshold,
         attacks=[a.strip() for a in attacks.split(",")] if attacks else None,
         conditions=(tuple(c.strip() for c in conditions.split(","))
                     if conditions else DEFAULT_CONDITIONS),
+        human_texts=[e.text for e in human],
     )
     typer.echo("\n" + render_table(results))
+    typer.echo("\n" + render_cost(cost))
 
     path = Path(out) / f"adversarial_{loaded.experiment}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -332,6 +349,8 @@ def evaluate(
         "n_ai_documents": len(ai),
         "split": "test",
         "conditions_scored": list(results[0].fnr) if results else [],
+        "human_cost": {c: {"fpr": round(v.fpr, 6), "n_human": v.n_human}
+                       for c, v in cost.items()},
         "note": (
             "delta-FNR against the clean baseline MEASURED UNDER THE SAME CONDITION, not "
             "against one global baseline. No-ops and attacks failing preserves_meaning are "

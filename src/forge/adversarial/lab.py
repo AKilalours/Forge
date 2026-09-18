@@ -23,7 +23,7 @@ from forge.adversarial.attacks import (
     preserves_meaning,
 )
 from forge.cleaning.normalize import normalize
-from forge.evaluation.metrics import false_negative_rate
+from forge.evaluation.metrics import false_negative_rate, false_positive_rate
 
 # THE CONDITIONS, each of which is a deployment choice rather than a variation on one.
 #
@@ -42,6 +42,26 @@ from forge.evaluation.metrics import false_negative_rate
 # an attacked column against a clean baseline measured under a different transform is the
 # single easiest way to publish a defence that does not work.
 #
+# THE HOLE THE FIRST VERSION OF THIS CONTROL LEFT, found by running it.
+#
+# The per-condition clean baseline scores CLEAN AI DOCUMENTS. It catches a transform that
+# stops the detector recognising AI text. It is blind to the opposite failure, and the
+# opposite failure is what a transform like casefolding is most likely to cause.
+#
+# FNR is the fraction of AI documents scored BELOW the threshold. A transform that pushes
+# every score UP drives FNR to zero on every attack and on the clean baseline at once, and
+# reads as a perfect, free defence. That is exactly what the first casefolded run produced:
+# 0.000 in every cell of every row, clean and attacked alike, including case_perturb at
+# 0.978. A number that good against seventeen attacks is a measurement artefact, not a
+# defence.
+#
+# What it cannot be, from this lab alone, is distinguished from a real defence, because
+# this lab only ever scores AI documents. The cost of inflated scores lands entirely on
+# HUMAN documents as false positives, and the deployed threshold was fitted at FPR 0.001
+# on cased, unfolded text. So human documents are scored through every condition too, and
+# the FPR at the same threshold is reported beside the FNR. A defence that halves FNR and
+# triples FPR is not a defence, and until this column existed there was no way to see it.
+#
 # casefolded is included expecting it to FAIL, and it is worth running for that reason.
 # Case perturbation destroys information: no transform recovers the original casing, so
 # folding case can only help by making attacked and clean text look alike to the tokenizer.
@@ -59,6 +79,19 @@ CONDITIONS: dict[str, Callable[[str], str]] = {
 # What a default run measures. The two candidate defences double the number of forward
 # passes per cell, so they are opt in: on CPU this lab already takes minutes.
 DEFAULT_CONDITIONS = ("raw", "normalised")
+
+
+@dataclass(frozen=True)
+class ConditionCost:
+    """What a condition does to HUMAN documents, at the deployed threshold.
+
+    Measured once per run, not per attack, because it does not depend on the attack: it is
+    the price of the transform itself. `fpr` at the fitted threshold is the number that
+    says whether a condition can be deployed at all.
+    """
+
+    fpr: float
+    n_human: int
 
 
 @dataclass
@@ -136,8 +169,16 @@ def run_attacks(
     threshold: float,
     attacks: list[str] | None = None,
     conditions: tuple[str, ...] = DEFAULT_CONDITIONS,
-) -> list[AttackResult]:
-    """ai_texts must all be genuinely AI-generated: FNR is the metric an evader moves."""
+    human_texts: list[str] | None = None,
+) -> tuple[list[AttackResult], dict[str, ConditionCost]]:
+    """ai_texts must all be genuinely AI-generated: FNR is the metric an evader moves.
+
+    human_texts is what stops a score-inflating transform reading as a perfect defence.
+    Without it this function can only report FNR, and FNR alone cannot tell a defence from
+    a transform that pushes every score above the threshold. Returns the per-condition
+    human cost alongside the results; it is empty when no human documents are supplied,
+    and a caller that publishes a new condition without it is publishing half a number.
+    """
     unknown = [c for c in conditions if c not in CONDITIONS]
     if unknown:
         raise ValueError(f"unknown conditions {unknown}; known: {sorted(CONDITIONS)}")
@@ -157,6 +198,18 @@ def run_attacks(
                                threshold)
         for c in conditions
     }
+
+    cost: dict[str, ConditionCost] = {}
+    if human_texts:
+        human_labels = [0] * len(human_texts)
+        for c in conditions:
+            cost[c] = ConditionCost(
+                fpr=false_positive_rate(
+                    human_labels,
+                    score_fn([CONDITIONS[c](t) for t in human_texts]),
+                    threshold),
+                n_human=len(human_texts),
+            )
 
     out: list[AttackResult] = []
     for name in names:
@@ -190,7 +243,25 @@ def run_attacks(
                     n_scored=len(kept), n_noop=n_noop, n_invalid=n_invalid,
                 )
             )
-    return out
+    return out, cost
+
+
+def render_cost(cost: dict[str, ConditionCost]) -> str:
+    """The human column, printed separately because it is per condition and not per attack.
+
+    Printed even when empty, saying so, because a silent absence is how the casefolded
+    column nearly got published as a free perfect defence.
+    """
+    if not cost:
+        return ("NO HUMAN DOCUMENTS SCORED. Every number above is FNR on AI documents "
+                "only, so a transform that inflates all scores is indistinguishable here "
+                "from a real defence. Pass human documents before trusting a new "
+                "condition.")
+    n = next(iter(cost.values())).n_human
+    body = ", ".join(f"{c}={v.fpr:.4f}" for c, v in cost.items())
+    return (f"false positive rate on {n} human documents at the deployed threshold: {body}"
+            "\n  A condition whose FPR rises has not defended anything, it has moved the "
+            "operating point.")
 
 
 def render_table(results: list[AttackResult]) -> str:
