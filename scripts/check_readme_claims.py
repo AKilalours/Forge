@@ -475,6 +475,49 @@ def main(check_test_count: bool = True) -> int:
                         bad.append(f"spark p={n} {label}: README {published!r} vs "
                                    f"artifact {stored!r}")
 
+    # ---- beam local sweep -----------------------------------------------------
+    # Gated on the same terms as the Spark sweep, plus two the Spark table does not need.
+    # The comparison between the two runners is only legitimate if they scanned the same
+    # number of documents, so that is checked across artifacts rather than trusted, and the
+    # runner name is checked because "DirectRunner" in this artifact would mean the sweep
+    # varied a worker count Prism never read.
+    beam_path = REPORTS / "beam" / "beam_summary.json"
+    if "| Partitions | Model loads |" in md:
+        if not beam_path.exists():
+            bad.append("README publishes a Beam sweep but beam_summary.json is missing")
+        else:
+            doc = json.loads(beam_path.read_text())
+            bm = {r["partitions"]: r for r in doc["rows"]}
+            if doc.get("runner") != "FnApiRunner":
+                bad.append(f"beam artifact runner is {doc.get('runner')!r}, not FnApiRunner: "
+                           "DirectRunner resolves to Prism, which ignores the worker count "
+                           "the sweep varies, so the table would not be a scaling table")
+            for row_key, cells in table_rows(md, "| Partitions | Model loads |").items():
+                n = int(row_key)
+                if n not in bm:
+                    bad.append(f"beam table has {n} partitions, the artifact does not")
+                    continue
+                r_ = bm[n]
+                for label, published, stored, pct in [
+                    ("model loads", cells[0], r_["model_loads"], False),
+                    ("docs/s", cells[1], r_["documents_per_second_compute"], False),
+                    ("speedup", cells[2], r_["speedup"], False),
+                    ("efficiency", cells[3], r_["efficiency"], True),
+                    ("skew", cells[4], r_["skew"], False),
+                ]:
+                    if not close(published, float(stored), percent=pct):
+                        bad.append(f"beam p={n} {label}: README {published!r} vs "
+                                   f"artifact {stored!r}")
+            if spark_path.exists():
+                spark_docs = json.loads(spark_path.read_text())["documents_scanned"]
+                if doc["documents_scanned"] != spark_docs:
+                    bad.append(
+                        f"the two runners scanned different numbers of documents "
+                        f"(spark {spark_docs}, beam {doc['documents_scanned']}). A "
+                        f"comparison between them is not a comparison. Re-run both with "
+                        f"the same --max-docs."
+                    )
+
     # ---- badges --------------------------------------------------------------
     auroc_badge = re.search(r"In--distribution%20AUROC-([\d.]+)-", md)
     if not auroc_badge or not close(auroc_badge.group(1), summary("A")["val"]["auroc"]):

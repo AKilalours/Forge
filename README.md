@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Tests-1039%20passing-00C853?style=for-the-badge"/>
+  <img src="https://img.shields.io/badge/Tests-1068%20passing-00C853?style=for-the-badge"/>
   <img src="https://img.shields.io/badge/In--distribution%20AUROC-0.99999-00C853?style=for-the-badge"/>
   <img src="https://img.shields.io/badge/FPR%20budget-0.1%25-0056D2?style=for-the-badge"/>
   <img src="https://img.shields.io/badge/Headline-Partial%20null%20result-FF8F00?style=for-the-badge"/>
@@ -674,7 +674,7 @@ themselves, so there is exactly one of each.
 
 ## 🧪 What the Test Suite Is For
 
-**1039 tests**, and the interesting ones are not unit tests. They are regression tests, each
+**1068 tests**, and the interesting ones are not unit tests. They are regression tests, each
 named after a specific wrong answer this project shipped and then caught:
 
 | Test | The failure it locks out |
@@ -766,7 +766,7 @@ Panagram_Forge/
 ├── reports/experiments/    # every committed run record and score array
 ├── docs/                   # evaluation · writeup · model card · data spec
 ├── demo/                   # held-in AI samples for testing the text tab
-└── tests/unit/             # 1039 tests, most named after a real bug
+└── tests/unit/             # 1068 tests, most named after a real bug
 ```
 
 ---

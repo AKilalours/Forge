@@ -4,6 +4,9 @@
     python scripts/spark_scan_reserve.py --partitions 4
     python scripts/spark_scan_reserve.py --summarise
 
+This is the Spark half of a pair; scripts/beam_scan_reserve.py is the other, written to
+the same shape so the two tables are comparable.
+
 WHAT THIS MEASURES. Throughput and partition skew for the mining scan, in Spark LOCAL
 mode, on this machine. It does not measure a cluster, and this repository has never run
 one. The reserve pool the job is written for (5M documents) is not on disk: data/reserve/
@@ -25,57 +28,27 @@ import json
 import time
 from pathlib import Path
 
+# THE SHARED CORE. These three used to be defined here, and the Beam runner needs exactly
+# the same arithmetic: the same fixed-total document cap, the same division of cores among
+# partitions, the same strict reserve-pool check. A second copy is how two runners end up
+# scanning different numbers of documents while both printing a speedup, so they live in
+# forge.hard_negative.scan_core and both scripts import them. Their reasoning is documented
+# there.
+from forge.hard_negative.scan_core import (
+    docs_per_partition,
+    is_reserve_pool,
+    threads_per_partition,
+)
+
 OUT = Path("reports/experiments/spark")
 DEFAULT_ROOT = "data/reserve"
-
-
-def _is_reserve_pool(root: str) -> bool:
-    """A mining round may only read the reserve pool. Path-based and deliberately strict:
-    a check that tries to be clever here is a check that eventually says yes to training
-    data."""
-    return Path(root).resolve().name == "reserve"
-
-
-def docs_per_partition(total_docs: int | None, partitions: int) -> int | None:
-    """Split a FIXED total across partitions, so every partition count does the same work.
-
-    THE INVARIANT, and this is the third place in this repository that needs it.
-    forge.training.scaling holds the global batch fixed across world sizes.
-    DistributedRun holds step semantics fixed across strategies. Here it is total
-    documents fixed across partition counts.
-
-    The first version of this script took --max-docs-per-partition, so four partitions
-    scanned four times as many documents as one. Wall time would have stayed roughly flat,
-    the speedup would have read as 1.0, and the honest conclusion "Spark does not help"
-    would have been drawn from a run that quietly did four times the work. A scaling
-    number computed over a workload that grows with the parallelism is not a scaling
-    number.
-    """
-    if total_docs is None:
-        return None
-    return -(-total_docs // partitions)      # ceiling, so no document is dropped
-
-
-def threads_per_partition(partitions: int, override: int | None = None) -> int:
-    """Divide the machine's cores among the partitions instead of letting them collide.
-
-    Spark parallelism multiplies with torch's own intra-op threading. Without this, four
-    partitions each asking for four threads want sixteen cores from a machine that has
-    fewer, and the measured result was efficiency dropping to 43% at a skew of 1.08:
-    perfectly balanced partitions on a completely saturated machine.
-    """
-    import os
-
-    if override is not None:
-        return max(1, override)
-    return max(1, (os.cpu_count() or 1) // max(1, partitions))
 
 
 def run(root: str, arm: str, threshold: float, partitions: int,
         total_docs: int | None, torch_threads: int | None = None) -> dict:
     from pyspark.sql import SparkSession
 
-    from forge.hard_negative.spark_scan import (
+    from forge.hard_negative.scan_core import (
         balanced_partitions,
         partition_files,
         plan_scan,
@@ -84,7 +57,7 @@ def run(root: str, arm: str, threshold: float, partitions: int,
 
     plan = plan_scan(root, partitions=partitions, threshold=threshold)
     buckets = balanced_partitions(plan)
-    mining_allowed = _is_reserve_pool(root)
+    mining_allowed = is_reserve_pool(root)
     per_partition_cap = docs_per_partition(total_docs, len(buckets))
     threads = threads_per_partition(len(buckets), torch_threads)
 

@@ -112,6 +112,14 @@ orchestration = [
   "apache-airflow>=3.0,<4",
   "apache-airflow-providers-standard>=0.1",
   "pyspark>=3.5",
+  # UPPER BOUND DELIBERATE, and this one has already earned it. Beam 2.65 changed what
+  # `--runner=DirectRunner` means: it now resolves to a switching runner that prefers
+  # Prism, a Go binary in a subprocess that ignores direct_num_workers. A sweep written
+  # against the old meaning still runs, still produces a table, and varies a number the
+  # runner never reads. That is precisely the failure an unbounded pin invites, and it is
+  # why forge.hard_negative.beam_scan names its runner explicitly instead of trusting the
+  # default. Verified against 2.76.
+  "apache-beam>=2.60,<3",
 ]
 # The Streamlit deployment. Streamlit Community Cloud is the only free host that runs a
 # torch app without a payment card, so streamlit_app.py is the deployed interface and

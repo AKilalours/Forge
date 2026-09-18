@@ -24,7 +24,7 @@ so they were removed rather than left raising.
 | 4 | NVIDIA GPU programming and CUDA | `training/profiling.py` + `scripts/profile_train_step.py`, run on an A100-80GB. Ranked device time committed at `reports/experiments/profile/`. The target is named by measurement, not by guess: `aten::scatter_add_` is **20.87%** of device time, against **4.47%** for `bmm` and `mm` combined. `kernels/cuda/` is still empty. | 7 | profiling **implemented and run**; kernel **not written** |
 | 5 | Distributed training (DeepSpeed, FSDP, Ray) | **All three run, at different levels.** FSDP on 1/2/4 A100-SXM4 at 98.5% and 97.9%; FSDP vs DeepSpeed ZeRO-3 head to head on 2x L40S at a fixed global batch of 64, where DeepSpeed is 8% faster and 16% lighter while scaling 1.5 points worse. Ray Train launches the same job via `TorchTrainer` (`scripts/ray_train_launch.py`), verified on CPU with gloo at 2 workers: **a wiring check, not a benchmark**. `DistributedRun.micro_step` owns the step semantics so the strategies cannot be compared unfairly by accident. | 7 | FSDP + DeepSpeed **measured on GPU**; Ray **launches correctly on CPU**, never on GPU or multi-node |
 | 6 | Inference frameworks (vLLM) | `generation/generators/base.py`: two-pass scheduler holding one engine at a time, GPU preflight, explicit allocator teardown, scheduler invariants under test. Single GPU. | 2 | **implemented** |
-| 7 | Large-scale data processing (Spark, Beam) | `hard_negative/spark_scan.py`: the reserve-pool mining scan as a PySpark job, model loaded once per executor process, round-robin shard partitioning, refuses to mine from non-reserve roots. Run in local mode, records at `reports/experiments/spark/`. Cleaning stays on Polars, deliberately. **No Beam.** | 7 | Spark job **implemented and run locally**; **never on a cluster**; Beam **absent** |
+| 7 | Large-scale data processing (Spark, Beam) | **Both, over one scan.** `hard_negative/scan_core.py` is the reserve-pool mining scan: round-robin shard partitioning, model loaded once per worker, a fixed total document budget split across partitions, and a strict refusal to mine from non-reserve roots. `spark_scan.py` distributes it with PySpark `mapPartitions`; `beam_scan.py` distributes it with a Beam pipeline. Neither owns a decision that affects the result, which is what makes the two measurements comparable. The Spark sweep is recorded at `reports/experiments/spark/`; the Beam sweep is not recorded yet, so this row claims the port and not a number. Cleaning stays on Polars, deliberately. | 7 | Spark **implemented and run locally**; Beam **implemented and tested, sweep not yet recorded**; **neither on a cluster or a distributed runner** |
 | 8 | Orchestration (Airflow) | `orchestration/dags/forge_flywheel.py`: the mining flywheel as a DAG. BashOperator throughout so the scheduler never imports torch at parse time; `catchup=False`, `max_active_runs=1`, no retries on train or gate; every artifact path scoped to the run id. 11 tests in their own CI job so they cannot silently skip. | 8 | DAG **implemented and validated in CI**; **never run against a real corpus** |
 | 9 | MLOps and experiment tracking | `registry/model_registry.py`, W&B config in every training YAML, `MANIFEST.json` dataset versioning | 3 | registry contract implemented |
 | 10 | DevOps tools | `.github/workflows/ci.yml` (lint, tests, spec check, README claim check), `Makefile`, `infra/docker/`, `pyproject.toml`, ruff/mypy/pytest | 0 | **implemented**, and the workflow now actually triggers: it was pinned to a `main` branch this repo does not have |
@@ -65,11 +65,24 @@ misapplied dependency.
 on one machine and Spark would add operational cost for no throughput. That is still the
 right call and the cleaning path has not changed.
 
-The mining scan is the job with a different shape, and it is now written:
-`hard_negative/spark_scan.py`, living with the Phase 4 mining code rather than in a folder
-that exists to name a framework. It reads sharded parquet, loads the detector once per
-executor process, scores each document independently, and returns only the confident false
-positives so the pool does not cross the network to be discarded.
+The mining scan is the job with a different shape, and it is now written twice:
+`hard_negative/scan_core.py` is the scan, `spark_scan.py` and `beam_scan.py` are two ways
+of distributing it. They live with the Phase 4 mining code rather than in a folder that
+exists to name a framework. The scan reads sharded parquet, loads the detector once per
+worker, scores each document independently, and returns only the confident false positives
+so the pool does not cross the network to be discarded.
+
+**What the second runner was actually for.** Not a benchmark. The scan had been written for
+Spark, and everything that decided whether it finished had ended up inside a module named
+after Spark: the shard partitioning, the document cap that holds the work constant, the
+division of cores among partitions, the per-worker model cache. Porting it was the test of
+whether any of that was really Spark's, and the answer was no, which is why `scan_core`
+exists. The port also found two defects the Spark path could not expose, both of which
+produced a plausible table rather than an error, and both of which are written up in
+`beam_scan.py`: `--runner=DirectRunner` no longer means the DirectRunner, and the
+per-worker model cache was not thread safe. Both were found on a stub scorer, not on the
+real arms, so the Beam sweep on this machine is still unrecorded and this section makes no
+throughput claim for it.
 
 **What the local run proved, and what it could not.** On a 10-core machine, scanning a
 fixed 40 documents at 1, 2 and 4 partitions, throughput tops out near 5.5 docs/s however
