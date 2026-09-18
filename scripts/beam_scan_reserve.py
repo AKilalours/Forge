@@ -38,6 +38,7 @@ from pathlib import Path
 from forge.hard_negative.beam_scan import RUNNER
 from forge.hard_negative.scan_core import (
     docs_per_partition,
+    human_pool_pattern,
     is_reserve_pool,
     threads_per_partition,
 )
@@ -83,7 +84,7 @@ def _collect(pattern_dir: Path) -> list[dict]:
 
 def run(root: str, arm: str, threshold: float, partitions: int,
         total_docs: int | None, torch_threads: int | None = None,
-        pattern: str = "**/*.parquet",
+        pattern: str | None = None,
         running_mode: str = "multi_threading") -> dict:
     import apache_beam as beam
 
@@ -94,6 +95,9 @@ def run(root: str, arm: str, threshold: float, partitions: int,
     )
     from forge.hard_negative.scan_core import plan_scan
 
+    # Resolved here rather than left as None, so the artifact records the glob that was
+    # actually scanned instead of the absence of an argument.
+    pattern = pattern or human_pool_pattern()
     plan = plan_scan(root, partitions=partitions, threshold=threshold,
                      pattern=pattern)
     buckets = keyed_buckets(plan)
@@ -329,11 +333,12 @@ if __name__ == "__main__":
                     help="local runner worker model. multi_processing is the mode "
                          "comparable to Spark local, because each partition gets its own "
                          "process and therefore its own model load.")
-    ap.add_argument("--pattern", default="**/*.parquet",
-                    help="glob under --root. The default takes every parquet in the tree, "
-                         "which is wrong for data/silver: it holds the human corpus under "
-                         "source=*/ and the generated arms under mirrors/ and random/. Use "
-                         "'source=*/split=*/*.parquet' for the human pool.")
+    ap.add_argument("--pattern", default=None,
+                    help="glob under --root. Defaults to the human-corpus layout the "
+                         "ingestion writer defines (PARTITION_GLOB), which is what makes "
+                         "data/silver scannable without knowing that it also holds the "
+                         "generated arms under mirrors/ and random/. Pass one explicitly "
+                         "only for a root laid out differently.")
     ap.add_argument("--summarise", action="store_true")
     a = ap.parse_args()
     if a.summarise:

@@ -411,9 +411,8 @@ def test_the_fingerprint_is_stable_across_two_audits_of_one_pool(tmp_path) -> No
 
 
 def test_plan_scan_selects_only_the_human_shards_when_given_the_pattern(tmp_path) -> None:
-    """The fix for the failed sweep, as an assertion. The default recursive glob takes the
-    generated arms too, which is why the default is not what this repository's own
-    data/silver should be scanned with."""
+    """The fix for the failed sweep, as an assertion, in both directions: the human layout
+    selects only human shards, and a recursive glob over the same tree is still refused."""
     from forge.hard_negative.scan_core import ScanError, plan_scan
 
     _write_shard(tmp_path / "source=fw" / "split=test" / "part-000.parquet", _human())
@@ -424,5 +423,42 @@ def test_plan_scan_selects_only_the_human_shards_when_given_the_pattern(tmp_path
     assert len(plan.files) == 1
     assert plan.pool is not None and plan.pool.total_rows == 3
 
+    # The refusal now needs the recursive glob passed EXPLICITLY, because the default is
+    # the writer's layout rather than "everything under here". That is the point of the
+    # change: the dangerous pattern is no longer what you get by not thinking about it.
+    # The audit still stands behind it for anyone who does pass it.
     with pytest.raises(ScanError, match="GENERATED text"):
-        plan_scan(str(tmp_path), partitions=1, threshold=0.99)
+        plan_scan(str(tmp_path), partitions=1, threshold=0.99, pattern="**/*.parquet")
+
+
+def test_the_default_pattern_comes_from_the_writer_not_from_a_second_opinion() -> None:
+    """THE FLAG THAT SHOULD NOT HAVE BEEN A FLAG.
+
+    The scan defaulted to a recursive **/*.parquet glob, which under data/silver takes the
+    human corpus and both generated arms, and the Beam sweep died four partitions deep as a
+    result. The fix was a --pattern argument: correct, and it put the burden on whoever runs
+    the command to know something the repository already knew. forge.ingestion.writer
+    defines the layout, forge.training.data reads it back with exactly that glob, and this
+    scan was the third reader written as though the layout were unknown.
+
+    If the writer ever changes its layout, this fails rather than silently scanning nothing.
+    """
+    from forge.hard_negative.scan_core import human_pool_pattern
+    from forge.ingestion.writer import PARTITION_GLOB
+
+    assert human_pool_pattern() == PARTITION_GLOB
+
+
+def test_a_default_plan_over_a_mixed_root_no_longer_needs_to_be_told_the_pattern(
+    tmp_path,
+) -> None:
+    """The regression, stated as the absence of an argument. This is the exact tree that
+    produced two hundred lines of Beam traceback."""
+    from forge.hard_negative.scan_core import plan_scan
+
+    _write_shard(tmp_path / "source=fw" / "split=test" / "part-000.parquet", _human())
+    _write_shard(tmp_path / "mirrors" / "split=test" / "part-qwen.parquet", _generated())
+
+    plan = plan_scan(str(tmp_path), partitions=1, threshold=0.99)
+    assert len(plan.files) == 1
+    assert plan.files[0].endswith("source=fw/split=test/part-000.parquet")

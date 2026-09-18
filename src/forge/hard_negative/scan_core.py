@@ -190,16 +190,36 @@ class ScanPlan:
         return len(self.files) / self.partitions
 
 
+def human_pool_pattern() -> str:
+    """Where the human corpus lives under a silver root, from the one place that defines it.
+
+    THE FLAG THAT SHOULD NOT HAVE BEEN A FLAG. This scan defaulted to a recursive
+    **/*.parquet glob, which under data/silver takes the human corpus AND the generated
+    arms, and the Beam sweep died four partitions deep on a generated shard as a result.
+    The fix at the time was a --pattern argument, which works and puts the burden on
+    whoever runs the command to know something the repository already knew:
+    forge.ingestion.writer.PARTITION_GLOB is what the writer lays the human corpus out
+    with, and forge.training.data has always read it back with exactly that glob. Two
+    readers of one layout, and this was the third, written as though the layout were
+    unknown. It is the default now, and --pattern stays for a root shaped differently.
+    """
+    from forge.ingestion.writer import PARTITION_GLOB
+
+    return PARTITION_GLOB
+
+
 def plan_scan(root: str, partitions: int, threshold: float,
-              pattern: str = "**/*.parquet", audit: bool = True) -> ScanPlan:
+              pattern: str | None = None, audit: bool = True) -> ScanPlan:
     """Build the plan. Files are SORTED, so two runs of the same pool scan in the same
     order and a re-run is comparable to the one before it.
 
-    The pattern is a parameter because a root is not always a homogeneous pool. data/silver
-    holds the human corpus under source=*/ and the generated arms under mirrors/ and
-    random/, and the default recursive glob picks up all three. `audit` exists only so a
-    test can build a plan over paths that are not real files; a run never turns it off.
+    The pattern defaults to the human-corpus layout the ingestion writer defines, because a
+    root is not always a homogeneous pool: data/silver holds the human corpus under
+    source=*/ and the generated arms under mirrors/ and random/. Pass a pattern explicitly
+    for a root laid out differently. `audit` exists only so a test can build a plan over
+    paths that are not real files; a run never turns it off.
     """
+    pattern = pattern if pattern is not None else human_pool_pattern()
     files = tuple(sorted(glob.glob(f"{root}/{pattern}", recursive=True)))
     pool = audit_pool(files) if audit and files else None
     return ScanPlan(files=files, partitions=partitions, threshold=threshold, pool=pool)

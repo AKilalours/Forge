@@ -36,6 +36,7 @@ from pathlib import Path
 # there.
 from forge.hard_negative.scan_core import (
     docs_per_partition,
+    human_pool_pattern,
     is_reserve_pool,
     threads_per_partition,
 )
@@ -46,7 +47,7 @@ DEFAULT_ROOT = "data/reserve"
 
 def run(root: str, arm: str, threshold: float, partitions: int,
         total_docs: int | None, torch_threads: int | None = None,
-        pattern: str = "**/*.parquet") -> dict:
+        pattern: str | None = None) -> dict:
     from pyspark.sql import SparkSession
 
     from forge.hard_negative.scan_core import (
@@ -56,6 +57,9 @@ def run(root: str, arm: str, threshold: float, partitions: int,
         scan_partition,
     )
 
+    # Resolved here rather than left as None, so the artifact records the glob that was
+    # actually scanned instead of the absence of an argument.
+    pattern = pattern or human_pool_pattern()
     plan = plan_scan(root, partitions=partitions, threshold=threshold,
                      pattern=pattern)
     buckets = balanced_partitions(plan)
@@ -247,11 +251,12 @@ if __name__ == "__main__":
     ap.add_argument("--torch-threads", type=int, default=None,
                     help="intra-op threads PER PARTITION. Default divides the host's "
                          "cores among the partitions so they do not oversubscribe.")
-    ap.add_argument("--pattern", default="**/*.parquet",
-                    help="glob under --root. The default takes every parquet in the tree, "
-                         "which is wrong for data/silver: it holds the human corpus under "
-                         "source=*/ and the generated arms under mirrors/ and random/. Use "
-                         "'source=*/split=*/*.parquet' for the human pool.")
+    ap.add_argument("--pattern", default=None,
+                    help="glob under --root. Defaults to the human-corpus layout the "
+                         "ingestion writer defines (PARTITION_GLOB), which is what makes "
+                         "data/silver scannable without knowing that it also holds the "
+                         "generated arms under mirrors/ and random/. Pass one explicitly "
+                         "only for a root laid out differently.")
     ap.add_argument("--summarise", action="store_true")
     a = ap.parse_args()
     if a.summarise:
