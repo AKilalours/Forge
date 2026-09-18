@@ -259,6 +259,13 @@ def evaluate(
     limit: int = typer.Option(500, "--limit", help="AI test documents to attack"),
     out: str = typer.Option("reports/experiments", "--out"),
     attacks: str = typer.Option(None, "--attacks", help="comma-separated subset"),
+    conditions: str = typer.Option(
+        None, "--conditions",
+        help="comma-separated preprocessing conditions to score. Default 'raw,normalised'. "
+             "Add 'folded' to measure confusables folding against homoglyph substitution, "
+             "and 'casefolded' to measure case folding against case perturbation. Each "
+             "extra condition rescores every cell AND the clean baseline, so it roughly "
+             "doubles the run; the clean column is what says whether the defence is free."),
 ) -> None:
     """Run the adversarial laboratory against a trained arm: the delta-FNR table.
 
@@ -277,7 +284,7 @@ def evaluate(
     """
     import json
 
-    from forge.adversarial.lab import render_table, run_attacks
+    from forge.adversarial.lab import DEFAULT_CONDITIONS, render_table, run_attacks
     from forge.inference.scorer import ArmUnavailable, load_arm
     from forge.training.data import load_examples
 
@@ -310,6 +317,8 @@ def evaluate(
         score_fn=lambda texts: [loaded.score(t).mean for t in texts],
         threshold=loaded.policy.threshold,
         attacks=[a.strip() for a in attacks.split(",")] if attacks else None,
+        conditions=(tuple(c.strip() for c in conditions.split(","))
+                    if conditions else DEFAULT_CONDITIONS),
     )
     typer.echo("\n" + render_table(results))
 
@@ -322,10 +331,14 @@ def evaluate(
         "fpr_budget": loaded.policy.fpr_budget,
         "n_ai_documents": len(ai),
         "split": "test",
+        "conditions_scored": list(results[0].fnr) if results else [],
         "note": (
-            "delta-FNR against the clean baseline, measured raw and after production "
-            "normalisation. No-ops and attacks failing preserves_meaning are excluded from "
-            "the scores and counted separately."
+            "delta-FNR against the clean baseline MEASURED UNDER THE SAME CONDITION, not "
+            "against one global baseline. No-ops and attacks failing preserves_meaning are "
+            "excluded from the scores and counted separately. Every condition carries its "
+            "own clean_fnr because folding and casefolding move clean documents too, and a "
+            "defence is only worth adopting if it lowers the attacked FNR by more than it "
+            "raises the clean one."
         ),
         "results": [r.as_dict() for r in results],
     }, indent=2) + "\n")

@@ -281,3 +281,104 @@ def test_table_renders_worst_attack_first():
                       attacks=["zero_width_insert", "homoglyph_substitute"])
     table = render_table(res)
     assert "homoglyph_substitute" in table.split("\n")[2]
+
+
+# ---------------------------------------------------------------------------
+# THE CANDIDATE DEFENCES, and the control that decides whether they are defences.
+#
+# Two attacks walk through normalisation untouched: homoglyph substitution at 0.306 and
+# case perturbation at 0.978, both moving the preprocessed column by under a thousandth.
+# Folding and casefolding are the two things that could be done about them at inference
+# time, and both transform CLEAN documents as well as attacked ones. So each condition
+# carries its own clean baseline, and a delta is measured against the baseline from the
+# same condition. Scoring an attacked column under one transform against a clean column
+# measured under another is the easiest way to publish a defence that does not work.
+# ---------------------------------------------------------------------------
+
+
+def test_each_condition_gets_its_own_clean_baseline() -> None:
+    """THE CONTROL. Without it, a transform that costs clean accuracy reports as a win:
+    its attacked FNR falls toward the clean FNR it just raised, and the delta shrinks for
+    the wrong reason."""
+    from forge.adversarial.lab import run_attacks
+
+    texts, ids = _corpus()
+    res = run_attacks(texts, ids, CharacterSensitiveDetector(), 0.5,
+                      attacks=["homoglyph_substitute"],
+                      conditions=("raw", "normalised", "folded"))
+    for r in res:
+        assert set(r.clean) == {"raw", "normalised", "folded"}
+        assert set(r.fnr) == {"raw", "normalised", "folded"}
+        for condition in r.fnr:
+            assert r.delta(condition) == pytest.approx(
+                r.fnr[condition] - r.clean[condition]
+            ), "a delta must be against the baseline from its own condition"
+
+
+def test_the_published_field_names_keep_their_old_meaning() -> None:
+    """The artifact schema has always published fnr_raw, fnr_preprocessed and clean_fnr,
+    and reports reference them. The conditions dict is additive, not a rename."""
+    from forge.adversarial.lab import run_attacks
+
+    texts, ids = _corpus()
+    res = run_attacks(texts, ids, CharacterSensitiveDetector(), 0.5,
+                      attacks=["homoglyph_substitute"])
+    for r in res:
+        assert r.fnr_raw == r.fnr["raw"]
+        assert r.fnr_preprocessed == r.fnr["normalised"]
+        assert r.clean_fnr == r.clean["normalised"]
+        d = r.as_dict()
+        for key in ("clean_fnr", "fnr_raw", "fnr_preprocessed", "delta_fnr_raw",
+                    "delta_fnr_preprocessed", "preprocessing_benefit"):
+            assert key in d, f"{key} disappeared from the artifact"
+        assert "conditions" in d
+
+
+def test_the_production_condition_cannot_be_dropped_from_a_run() -> None:
+    """Every published delta in this repository is stated against the normalised path. A
+    run without it produces a table whose numbers have no relationship to the deployed
+    system, and nothing downstream would notice."""
+    from forge.adversarial.lab import run_attacks
+
+    texts, ids = _corpus()
+    with pytest.raises(ValueError, match="production path"):
+        run_attacks(texts, ids, CharacterSensitiveDetector(), 0.5,
+                    attacks=["homoglyph_substitute"], conditions=("raw",))
+
+
+def test_an_unknown_condition_is_refused_before_any_scoring() -> None:
+    """Scoring 500 documents through 17 attacks before discovering a typo is an hour of
+    CPU for an error message."""
+    from forge.adversarial.lab import run_attacks
+
+    texts, ids = _corpus()
+    with pytest.raises(ValueError, match="unknown conditions"):
+        run_attacks(texts, ids, CharacterSensitiveDetector(), 0.5,
+                    attacks=["homoglyph_substitute"],
+                    conditions=("normalised", "case_folded"))
+
+
+def test_the_default_run_scores_exactly_what_it_always_did() -> None:
+    """Each extra condition rescores every cell and the clean baseline, so the default has
+    to stay at two or the existing lab run silently doubles in cost."""
+    from forge.adversarial.lab import DEFAULT_CONDITIONS, run_attacks
+
+    assert DEFAULT_CONDITIONS == ("raw", "normalised")
+    texts, ids = _corpus()
+    res = run_attacks(texts, ids, CharacterSensitiveDetector(), 0.5,
+                      attacks=["homoglyph_substitute"])
+    assert all(set(r.fnr) == {"raw", "normalised"} for r in res)
+
+
+def test_the_table_shows_clean_and_attacked_for_every_condition() -> None:
+    """A defence that trades clean accuracy for attacked accuracy must not be able to
+    look like a straight win in the rendered table."""
+    from forge.adversarial.lab import render_table, run_attacks
+
+    texts, ids = _corpus()
+    res = run_attacks(texts, ids, CharacterSensitiveDetector(), 0.5,
+                      attacks=["homoglyph_substitute"],
+                      conditions=("raw", "normalised", "folded"))
+    header = render_table(res).split("\n")[0]
+    for tag in ("raw.cln", "raw.atk", "normal.cln", "folded.cln", "folded.atk"):
+        assert tag in header, f"{tag} missing from {header!r}"
