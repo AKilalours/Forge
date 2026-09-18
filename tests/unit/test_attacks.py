@@ -475,3 +475,20 @@ def test_the_rendered_cost_names_every_condition_and_its_fpr() -> None:
         "the reading has to be stated: a rising FPR is a moved operating point, not a "
         "defence"
     )
+
+
+def test_the_cost_line_states_its_own_resolution() -> None:
+    """THE SECOND-ORDER HONESTY PROBLEM. This column exists to judge whether a condition
+    can be deployed against a threshold fitted at FPR 0.001, and 500 human documents
+    resolve 0.002 at best. Printing 0.0000 without saying so invites the reader to
+    conclude the budget is met when the measurement cannot see it. The catastrophic rise
+    it CAN see is the thing it is for."""
+    from forge.adversarial.lab import render_cost, run_attacks
+
+    texts, ids = _corpus()
+    _, cost = run_attacks(texts, ids, CharacterSensitiveDetector(), 0.5,
+                          attacks=["homoglyph_substitute"],
+                          human_texts=["plain human text here."] * 4)
+    rendered = render_cost(cost)
+    assert "RESOLUTION IS 1/4" in rendered
+    assert "0.001" in rendered, "the budget it cannot confirm has to be named"

@@ -259,9 +259,14 @@ def render_cost(cost: dict[str, ConditionCost]) -> str:
                 "condition.")
     n = next(iter(cost.values())).n_human
     body = ", ".join(f"{c}={v.fpr:.4f}" for c, v in cost.items())
-    return (f"false positive rate on {n} human documents at the deployed threshold: {body}"
-            "\n  A condition whose FPR rises has not defended anything, it has moved the "
-            "operating point.")
+    return (
+        f"false positive rate on {n} human documents at the deployed threshold: {body}"
+        f"\n  A condition whose FPR rises has not defended anything, it has moved the "
+        f"operating point."
+        f"\n  RESOLUTION IS 1/{n} = {1 / n:.4f}. This cannot confirm an FPR budget of "
+        f"0.001 and is not trying to; it is here to catch a transform whose FPR is not "
+        f"small, which is what perfect FNR across every attack actually looks like."
+    )
 
 
 def render_table(results: list[AttackResult]) -> str:

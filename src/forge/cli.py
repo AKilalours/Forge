@@ -259,6 +259,13 @@ def evaluate(
     limit: int = typer.Option(500, "--limit", help="AI test documents to attack"),
     out: str = typer.Option("reports/experiments", "--out"),
     attacks: str = typer.Option(None, "--attacks", help="comma-separated subset"),
+    human_limit: int = typer.Option(
+        0, "--human-limit",
+        help="human documents to score per condition, for the false positive column. "
+             "0 means use --limit. FPR RESOLUTION IS 1/n: 500 documents cannot tell 0.001 "
+             "from 0.000, which is the budget the threshold was fitted at, but they "
+             "resolve a catastrophic rise easily, and that is what a score-inflating "
+             "transform produces."),
     conditions: str = typer.Option(
         None, "--conditions",
         help="comma-separated preprocessing conditions to score. Default 'raw,normalised'. "
@@ -302,7 +309,12 @@ def evaluate(
             f"the adversarial lab attacks a trained detector: {error}"
         ) from None
 
+    # HUMAN ROOT IS NOT OPTIONAL HERE, and leaving it out is what made the first run of
+    # the four-condition sweep unreadable. Without it load_examples returns AI documents
+    # only, the human cost of every condition is empty, and a transform that inflates all
+    # scores reports a flawless FNR with nothing to contradict it.
     examples = load_examples(
+        human_root=cfg_data["paths"]["human"],
         ai_root=cfg_data["paths"]["ai"], splits=("test",),
         expect_arm=cfg_data["data"].get("arm"),
     )
@@ -310,7 +322,7 @@ def evaluate(
     # HUMAN DOCUMENTS ARE NOT OPTIONAL CONTEXT. FNR alone cannot separate a defence from a
     # transform that inflates every score, and the cost of inflation lands here as false
     # positives against a threshold fitted on untransformed text.
-    human = [e for e in examples if e.label == 0][:limit]
+    human = [e for e in examples if e.label == 0][:human_limit or limit]
     if not ai:
         raise PhaseNotImplemented(
             f"no AI documents in the test split of {cfg_data['paths']['ai']}. The lab "
