@@ -42,8 +42,24 @@ from forge.hard_negative.scan_core import (
     threads_per_partition,
 )
 
-OUT = Path("reports/experiments/beam")
+BEAM_REPORTS = Path("reports/experiments/beam")
 DEFAULT_ROOT = "data/reserve"
+
+
+def out_dir(running_mode: str) -> Path:
+    """One directory per execution mode, because the alternative is destructive.
+
+    The Spark script writes scan_p{N}.json into one directory, which is right when there
+    is one way to run it. There are two here, they produce different startup costs and
+    different model-load counts for the same throughput, and a second sweep into the same
+    directory would silently overwrite the first with files of the identical name. This
+    repository has already shipped that bug once, in write_mirrors, which wrote
+    part-000.parquet unconditionally and destroyed the previous run's output across
+    sequential generations. --summarise also refuses to mix modes, so an overwrite would
+    not even be caught as an inconsistency: it would just be a summary of whichever sweep
+    ran last, under whichever mode the reader assumed.
+    """
+    return BEAM_REPORTS / running_mode
 
 
 def _collect(pattern_dir: Path) -> list[dict]:
@@ -169,21 +185,25 @@ def run(root: str, arm: str, threshold: float, partitions: int,
             "ones scanned nothing, so this run is not comparable to the others."
         )
 
-    OUT.mkdir(parents=True, exist_ok=True)
-    path = OUT / f"scan_p{len(buckets)}.json"
+    out = out_dir(running_mode)
+    out.mkdir(parents=True, exist_ok=True)
+    path = out / f"scan_p{len(buckets)}.json"
     path.write_text(json.dumps(result, indent=1) + "\n")
     print(json.dumps({k: v for k, v in result.items() if k != "candidate_ids"}, indent=1))
     print(f"wrote {path}")
     return result
 
 
-def summarise() -> int:
+def summarise(running_mode: str) -> int:
+    OUT = out_dir(running_mode)
     runs = {}
     for f in sorted(OUT.glob("scan_p*.json")):
         d = json.loads(f.read_text())
         runs[d["partitions"]] = d
     if 1 not in runs:
-        print("no scan_p1.json: the single-partition run is the baseline for every speedup")
+        print(f"no scan_p1.json under {OUT}: the single-partition run is the baseline for "
+              f"every speedup. Sweep this mode first, or pass --running-mode to summarise "
+              f"the one you did sweep.")
         return 1
 
     budgets = {runs[p].get("documents_scanned") for p in runs}
@@ -279,6 +299,6 @@ if __name__ == "__main__":
     ap.add_argument("--summarise", action="store_true")
     a = ap.parse_args()
     if a.summarise:
-        raise SystemExit(summarise())
+        raise SystemExit(summarise(a.running_mode))
     run(a.root, a.arm, a.threshold, a.partitions, a.max_docs, a.torch_threads,
         a.running_mode)

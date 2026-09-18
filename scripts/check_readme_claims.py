@@ -481,13 +481,27 @@ def main(check_test_count: bool = True) -> int:
     # number of documents, so that is checked across artifacts rather than trusted, and the
     # runner name is checked because "DirectRunner" in this artifact would mean the sweep
     # varied a worker count Prism never read.
-    beam_path = REPORTS / "beam" / "beam_summary.json"
+    # WHICH SWEEP. The Beam runner has two local execution modes that produce different
+    # startup costs and model-load counts for the same throughput, so its artifacts are
+    # written one directory per mode. The README therefore has to say which one it is
+    # publishing, in a marker rather than in prose, because a gate that guessed would pass
+    # against whichever sweep happened to be on disk.
+    beam_mode = re.search(r"<!-- beam-mode: (\w+) -->", md)
+    beam_path = (REPORTS / "beam" / beam_mode.group(1) / "beam_summary.json"
+                 if beam_mode else None)
     if "| Partitions | Model loads |" in md:
-        if not beam_path.exists():
-            bad.append("README publishes a Beam sweep but beam_summary.json is missing")
+        if beam_mode is None:
+            bad.append("README publishes a Beam sweep with no <!-- beam-mode: ... --> "
+                       "marker, so there is no way to tell which sweep the table is from")
+        elif not beam_path.exists():
+            bad.append(f"README publishes the {beam_mode.group(1)} Beam sweep but "
+                       f"{beam_path} is missing")
         else:
             doc = json.loads(beam_path.read_text())
             bm = {r["partitions"]: r for r in doc["rows"]}
+            if doc.get("running_mode") != beam_mode.group(1):
+                bad.append(f"README says the Beam sweep is {beam_mode.group(1)!r} but the "
+                           f"artifact it points at was run as {doc.get('running_mode')!r}")
             if doc.get("runner") != "FnApiRunner":
                 bad.append(f"beam artifact runner is {doc.get('runner')!r}, not FnApiRunner: "
                            "DirectRunner resolves to Prism, which ignores the worker count "
