@@ -45,7 +45,8 @@ DEFAULT_ROOT = "data/reserve"
 
 
 def run(root: str, arm: str, threshold: float, partitions: int,
-        total_docs: int | None, torch_threads: int | None = None) -> dict:
+        total_docs: int | None, torch_threads: int | None = None,
+        pattern: str = "**/*.parquet") -> dict:
     from pyspark.sql import SparkSession
 
     from forge.hard_negative.scan_core import (
@@ -55,8 +56,24 @@ def run(root: str, arm: str, threshold: float, partitions: int,
         scan_partition,
     )
 
-    plan = plan_scan(root, partitions=partitions, threshold=threshold)
+    plan = plan_scan(root, partitions=partitions, threshold=threshold,
+                     pattern=pattern)
     buckets = balanced_partitions(plan)
+
+    # MORE PARTITIONS THAN SHARDS IS A SILENT OVERWRITE, not a smaller run.
+    # balanced_partitions drops empty buckets, so --partitions 4 over a 2-shard pool
+    # produces 2 buckets and the artifact is written as scan_p2.json, on top of the genuine
+    # two-partition run. The summary then reports a sweep whose rows came from different
+    # commands than the ones that were issued. Same shape as the write_mirrors bug and the
+    # per-mode directory: a filename that does not carry what makes the run different.
+    if len(buckets) != partitions:
+        raise SystemExit(
+            f"--partitions {partitions} was requested but the pool has only "
+            f"{len(plan.files)} shards, so only {len(buckets)} non-empty partitions can be "
+            f"formed. This run would be written as scan_p{len(buckets)}.json and overwrite "
+            f"the genuine {len(buckets)}-partition run. Sweep up to {len(plan.files)} "
+            f"partitions, or shard the pool further."
+        )
     mining_allowed = is_reserve_pool(root)
     per_partition_cap = docs_per_partition(total_docs, len(buckets))
     threads = threads_per_partition(len(buckets), torch_threads)
@@ -110,6 +127,13 @@ def run(root: str, arm: str, threshold: float, partitions: int,
         "threshold": threshold,
         "partitions": len(buckets),
         "files": len(plan.files),
+        "pattern": pattern,
+        # WHICH DOCUMENTS, not how many. The two runners are published side by side, and a
+        # matching document count does not establish that they read the same pool: this
+        # sweep's own root gained 24 generated shards between the Spark run and the Beam
+        # run and both would still have reported 40. The fingerprint hashes the sorted
+        # shard list with each shard's row count, so a rewritten shard changes it too.
+        "pool": plan.pool.as_record() if plan.pool else None,
         "total_docs_budget": total_docs,
         "docs_per_partition_cap": per_partition_cap,
         "torch_threads_per_partition": threads,
@@ -152,6 +176,13 @@ def summarise() -> int:
         print("no scan_p1.json: the single-partition run is the baseline for every speedup")
         return 1
 
+    pools = {(runs[p].get("pool") or {}).get("fingerprint") for p in runs}
+    if len(pools) != 1:
+        print(f"REFUSING TO SUMMARISE: the runs read different pools {sorted(map(str, pools))}. "
+              f"A speedup across runs over different shards is not a speedup. Re-run them "
+              f"with the same --root and --pattern.")
+        return 1
+
     budgets = {runs[p].get("documents_scanned") for p in runs}
     if len(budgets) != 1:
         print(f"REFUSING TO SUMMARISE: the runs scanned different numbers of documents "
@@ -178,6 +209,7 @@ def summarise() -> int:
         "root": runs[1]["root"],
         "is_reserve_pool": runs[1]["is_reserve_pool"],
         "documents_scanned": runs[1]["documents_scanned"],
+        "pool": runs[1].get("pool"),
         "invariant": (
             "Every partition count scans the SAME total number of documents; the "
             "per-partition cap absorbs the difference. Speedup is computed on compute "
@@ -215,8 +247,14 @@ if __name__ == "__main__":
     ap.add_argument("--torch-threads", type=int, default=None,
                     help="intra-op threads PER PARTITION. Default divides the host's "
                          "cores among the partitions so they do not oversubscribe.")
+    ap.add_argument("--pattern", default="**/*.parquet",
+                    help="glob under --root. The default takes every parquet in the tree, "
+                         "which is wrong for data/silver: it holds the human corpus under "
+                         "source=*/ and the generated arms under mirrors/ and random/. Use "
+                         "'source=*/split=*/*.parquet' for the human pool.")
     ap.add_argument("--summarise", action="store_true")
     a = ap.parse_args()
     if a.summarise:
         raise SystemExit(summarise())
-    run(a.root, a.arm, a.threshold, a.partitions, a.max_docs, a.torch_threads)
+    run(a.root, a.arm, a.threshold, a.partitions, a.max_docs, a.torch_threads,
+        pattern=a.pattern)

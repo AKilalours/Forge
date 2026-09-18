@@ -37,9 +37,127 @@ from typing import Any
 
 RESERVE_COLUMNS = ("doc_id", "source_group_id", "text", "domain", "source", "register")
 
+# What a shard must have for the scan to read it at all.
+REQUIRED_COLUMNS = ("doc_id", "source_group_id", "text")
+
+# What a shard must NOT have, and this is a correctness boundary rather than a schema one.
+# These columns are written by forge.generation: `generator` names the model that produced
+# the text, `label` marks it as AI, `sample_id` is the generated document's key. The mining
+# scan exists to find documents the detector scores as AI when they are HUMAN, so every hit
+# is by construction a false positive. On a generated shard every hit is a TRUE positive,
+# and mining those as hard negatives would train the detector to call its own synthetic
+# text human. That is not a degraded measurement, it is the opposite of the intended one.
+GENERATED_MARKER_COLUMNS = ("generator", "label", "sample_id")
+
 
 class ScanError(RuntimeError):
     pass
+
+
+@dataclass(frozen=True)
+class PoolAudit:
+    """What the pool actually contained, read from parquet footers before any worker starts.
+
+    WHY A FINGERPRINT AND NOT A DOCUMENT COUNT. The Spark sweep and the Beam sweep are
+    published side by side, and the only thing that makes that comparison legitimate is
+    that they scanned the same work. The first version of the claim gate checked that both
+    artifacts reported the same `documents_scanned`, which felt like the invariant and was
+    not: the Spark sweep ran when data/silver held 6 human shards, and by the time the Beam
+    sweep ran the v0.2-min regeneration had added 24 generated shards to the same tree.
+    Both runs would have reported 40 documents. They would have been 40 documents from
+    different corpora, and the gate would have passed.
+
+    A count is a property of the cap. The fingerprint is a property of the pool.
+    """
+
+    files: tuple[str, ...]
+    rows: tuple[int, ...]
+
+    def __post_init__(self) -> None:
+        if len(self.files) != len(self.rows):
+            raise ScanError("every audited file needs its row count")
+
+    @property
+    def total_rows(self) -> int:
+        return sum(self.rows)
+
+    @property
+    def fingerprint(self) -> str:
+        """sha256 over the sorted file list AND each file's row count.
+
+        Paths alone would not notice a shard being rewritten in place with different
+        content under the same name, which is exactly what a regeneration does.
+        """
+        import hashlib
+
+        payload = "\n".join(f"{f}:{n}" for f, n in zip(self.files, self.rows, strict=True))
+        return hashlib.sha256(payload.encode()).hexdigest()[:16]
+
+    def as_record(self) -> dict[str, Any]:
+        return {"n_files": len(self.files), "total_rows": self.total_rows,
+                "fingerprint": self.fingerprint, "files": list(self.files)}
+
+
+def audit_pool(files: Iterable[str]) -> PoolAudit:
+    """Read every shard's footer and refuse the pool before a single worker starts.
+
+    THE FAILURE THIS REPLACES. The column check used to live in _rows_from_files, inside
+    the worker, at read time. Pointing the scan at data/silver after the v0.2-min
+    regeneration therefore produced four partitions each dying separately on a generated
+    shard, roughly two hundred lines of Beam traceback wrapping a one-line cause, and no
+    artifact. ScanPlan already refuses an empty file list and an impossible partition count
+    on the driver, on the stated principle that a plan which is obviously wrong should be
+    visible before the compute is spent. The schema was the one part of "obviously wrong"
+    that had been left to the workers.
+
+    Footers only. Row counts and column names come from parquet metadata, so auditing
+    thousands of shards costs a directory's worth of seeks and no row reads.
+    """
+    import pyarrow.parquet as pq
+
+    audited: list[tuple[str, int]] = []
+    generated: list[str] = []
+    incomplete: list[tuple[str, list[str]]] = []
+    unreadable: list[tuple[str, str]] = []
+
+    for path in files:
+        try:
+            pf = pq.ParquetFile(path)
+            names = set(pf.schema_arrow.names)
+            rows = pf.metadata.num_rows
+        except Exception as exc:                 # noqa: BLE001 - reported, not swallowed
+            unreadable.append((path, type(exc).__name__))
+            continue
+        marker = sorted(names & set(GENERATED_MARKER_COLUMNS))
+        if marker:
+            generated.append(f"{path} (has {', '.join(marker)})")
+            continue
+        missing = sorted(set(REQUIRED_COLUMNS) - names)
+        if missing:
+            incomplete.append((path, missing))
+            continue
+        audited.append((path, rows))
+
+    if generated:
+        listed = "\n  ".join(generated)
+        raise ScanError(
+            f"{len(generated)} of {len(generated) + len(audited) + len(incomplete)} shards "
+            f"under this root are GENERATED text, not a human pool:\n  {listed}\n"
+            "The mining scan keeps documents the detector scores as AI when they are human, "
+            "so a hit on a generated shard is a true positive and mining it as a hard "
+            "negative would teach the detector to call its own synthetic text human. "
+            "Narrow the scan with a pattern that selects only the human shards, for example "
+            'pattern="source=*/split=*/*.parquet".'
+        )
+    if incomplete:
+        listed = "\n  ".join(f"{p} is missing {m}" for p, m in incomplete)
+        raise ScanError(f"{len(incomplete)} shards cannot be scanned:\n  {listed}")
+    if unreadable:
+        listed = "\n  ".join(f"{p} ({e})" for p, e in unreadable)
+        raise ScanError(f"{len(unreadable)} shards could not be opened:\n  {listed}")
+
+    return PoolAudit(files=tuple(f for f, _ in audited),
+                     rows=tuple(n for _, n in audited))
 
 
 @dataclass(frozen=True)
@@ -54,6 +172,7 @@ class ScanPlan:
     files: tuple[str, ...]
     partitions: int
     threshold: float
+    pool: PoolAudit | None = None
 
     def __post_init__(self) -> None:
         if not self.files:
@@ -72,11 +191,18 @@ class ScanPlan:
 
 
 def plan_scan(root: str, partitions: int, threshold: float,
-              pattern: str = "**/*.parquet") -> ScanPlan:
+              pattern: str = "**/*.parquet", audit: bool = True) -> ScanPlan:
     """Build the plan. Files are SORTED, so two runs of the same pool scan in the same
-    order and a re-run is comparable to the one before it."""
+    order and a re-run is comparable to the one before it.
+
+    The pattern is a parameter because a root is not always a homogeneous pool. data/silver
+    holds the human corpus under source=*/ and the generated arms under mirrors/ and
+    random/, and the default recursive glob picks up all three. `audit` exists only so a
+    test can build a plan over paths that are not real files; a run never turns it off.
+    """
     files = tuple(sorted(glob.glob(f"{root}/{pattern}", recursive=True)))
-    return ScanPlan(files=files, partitions=partitions, threshold=threshold)
+    pool = audit_pool(files) if audit and files else None
+    return ScanPlan(files=files, partitions=partitions, threshold=threshold, pool=pool)
 
 
 def balanced_partitions(plan: ScanPlan) -> list[list[str]]:

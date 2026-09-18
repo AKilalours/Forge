@@ -72,15 +72,24 @@ def test_every_file_is_scanned_exactly_once() -> None:
     assert len(flat) == len(set(flat))
 
 
-def test_plan_scan_sorts_so_two_runs_are_comparable() -> None:
-    import pathlib
-    import tempfile
+def test_plan_scan_sorts_so_two_runs_are_comparable(tmp_path) -> None:
+    """The shards are REAL parquet now, not empty files.
 
-    with tempfile.TemporaryDirectory() as d:
-        for name in ("b.parquet", "a.parquet", "c.parquet"):
-            (pathlib.Path(d) / name).write_bytes(b"")
-        plan = plan_scan(d, partitions=2, threshold=0.9, pattern="*.parquet")
+    They used to be `write_bytes(b"")`, which was enough when plan_scan only globbed. It
+    now audits every footer on the driver, because the schema check used to live in the
+    worker and a mixed pool therefore failed four partitions deep instead of before the
+    run. An empty file is not parquet, so the cheap fixture was also the one that would
+    have hidden the audit.
+    """
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    for name in ("b.parquet", "a.parquet", "c.parquet"):
+        pq.write_table(pa.table({"doc_id": ["d"], "source_group_id": ["g"],
+                                 "text": ["t"]}), tmp_path / name)
+    plan = plan_scan(str(tmp_path), partitions=2, threshold=0.9, pattern="*.parquet")
     assert [p.split("/")[-1] for p in plan.files] == ["a.parquet", "b.parquet", "c.parquet"]
+    assert plan.pool is not None, "a real run must carry the pool it audited"
 
 
 def test_skew_is_reported_because_it_decides_whether_more_executors_help() -> None:

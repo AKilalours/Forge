@@ -523,13 +523,33 @@ def main(check_test_count: bool = True) -> int:
                         bad.append(f"beam p={n} {label}: README {published!r} vs "
                                    f"artifact {stored!r}")
             if spark_path.exists():
-                spark_docs = json.loads(spark_path.read_text())["documents_scanned"]
-                if doc["documents_scanned"] != spark_docs:
+                sp_doc = json.loads(spark_path.read_text())
+                if doc["documents_scanned"] != sp_doc["documents_scanned"]:
                     bad.append(
                         f"the two runners scanned different numbers of documents "
-                        f"(spark {spark_docs}, beam {doc['documents_scanned']}). A "
-                        f"comparison between them is not a comparison. Re-run both with "
-                        f"the same --max-docs."
+                        f"(spark {sp_doc['documents_scanned']}, beam "
+                        f"{doc['documents_scanned']}). A comparison between them is not a "
+                        f"comparison. Re-run both with the same --max-docs."
+                    )
+                # THE CHECK THE DOCUMENT COUNT DOES NOT MAKE. Equal counts are a property
+                # of the cap, not of the pool. The Spark sweep ran when data/silver held 6
+                # human shards; the v0.2-min regeneration then added 24 generated shards to
+                # the same tree, and a Beam sweep over the same root would have reported the
+                # same 40 documents out of a different corpus. Only the fingerprint, which
+                # hashes the shard list with each shard's row count, refuses that.
+                pools = [(sp_doc.get("pool") or {}).get("fingerprint"),
+                         (doc.get("pool") or {}).get("fingerprint")]
+                if not all(pools):
+                    bad.append(
+                        "one of the published sweeps has no pool fingerprint, so there is "
+                        "no evidence the two runners read the same shards. Re-run the sweep "
+                        "that predates the fingerprint."
+                    )
+                elif pools[0] != pools[1]:
+                    bad.append(
+                        f"the two runners read different pools (spark {pools[0]}, beam "
+                        f"{pools[1]}). Same document count, different corpus. Re-run both "
+                        f"with the same --root and --pattern."
                     )
 
     # ---- badges --------------------------------------------------------------

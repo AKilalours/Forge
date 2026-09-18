@@ -28,12 +28,16 @@ from __future__ import annotations
 
 from forge.hard_negative.scan_core import (
     _SCORER_CACHE,
+    GENERATED_MARKER_COLUMNS,
+    REQUIRED_COLUMNS,
     RESERVE_COLUMNS,
+    PoolAudit,
     ScanError,
     ScanPlan,
     ScanStats,
     _rows_from_files,
     _scorer_for,
+    audit_pool,
     balanced_partitions,
     docs_per_partition,
     is_reserve_pool,
@@ -53,7 +57,11 @@ SparkScanError = ScanError
 # so they are part of this module's surface whether or not the underscore suggests it, and
 # naming them here is what marks them as re-exports rather than unused imports.
 __all__ = [
+    "GENERATED_MARKER_COLUMNS",
+    "REQUIRED_COLUMNS",
     "RESERVE_COLUMNS",
+    "PoolAudit",
+    "audit_pool",
     "_SCORER_CACHE",
     "_rows_from_files",
     "_scorer_for",

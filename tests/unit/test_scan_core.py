@@ -259,3 +259,170 @@ def test_the_second_call_in_a_process_does_not_claim_the_load() -> None:
     assert first is second
     assert first_loaded is True
     assert second_loaded is False
+
+
+# ---------------------------------------------------------------------------
+# THE POOL AUDIT, and the run that produced two hundred lines of traceback.
+#
+# The column check lived inside the worker, at read time. Pointing the Beam sweep at
+# data/silver after the v0.2-min regeneration gave four partitions each dying separately on
+# a generated shard, a Beam traceback long enough to bury its own one-line cause, and no
+# artifact. ScanPlan already refused an empty file list and an impossible partition count on
+# the driver, on the stated principle that an obviously wrong plan should be visible before
+# the compute is spent. The schema was the part of "obviously wrong" left to the workers.
+#
+# The deeper problem was not the schema. data/silver holds the human corpus under source=*/
+# and the generated arms under mirrors/ and random/, and the generated shards carry
+# `generator`, `label` and `sample_id` instead of `doc_id`. Had they happened to carry a
+# doc_id the scan would have run happily and mined AI text as human hard negatives, which
+# is the opposite of what the mining loop is for.
+# ---------------------------------------------------------------------------
+
+
+def _write_shard(path, columns: dict) -> None:
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pq.write_table(pa.table(columns), path)
+
+
+def _human(n: int = 3) -> dict:
+    return {"doc_id": [f"d{i}" for i in range(n)],
+            "source_group_id": ["g"] * n,
+            "text": ["human text"] * n}
+
+
+def _generated(n: int = 3) -> dict:
+    return {"sample_id": [f"s{i}" for i in range(n)],
+            "source_group_id": ["g"] * n,
+            "generator": ["qwen"] * n,
+            "label": ["ai"] * n,
+            "text": ["generated text"] * n}
+
+
+def test_a_generated_shard_is_refused_not_scanned(tmp_path) -> None:
+    """THE CORRECTNESS BOUNDARY, and it is not about columns.
+
+    The scan keeps documents the detector calls AI when they are human, so every hit is a
+    false positive by construction. On a generated shard every hit is a TRUE positive, and
+    mining those as hard negatives would teach the detector to call its own synthetic text
+    human. A generated shard in the pool is not a degraded measurement, it is an inverted
+    one, so it fails rather than being skipped.
+    """
+    from forge.hard_negative.scan_core import ScanError, audit_pool
+
+    _write_shard(tmp_path / "source=fw" / "part-000.parquet", _human())
+    _write_shard(tmp_path / "mirrors" / "part-qwen.parquet", _generated())
+
+    with pytest.raises(ScanError, match="GENERATED text"):
+        audit_pool(sorted(str(p) for p in tmp_path.rglob("*.parquet")))
+
+
+def test_the_refusal_names_every_offending_shard_not_just_the_first(tmp_path) -> None:
+    """Four partitions each reported their own first bad shard and nothing about the other
+    three. One driver-side error listing all of them is the difference between one fix and
+    four runs."""
+    from forge.hard_negative.scan_core import ScanError, audit_pool
+
+    for family in ("falcon", "phi", "qwen", "smollm"):
+        _write_shard(tmp_path / "mirrors" / f"part-{family}.parquet", _generated())
+
+    with pytest.raises(ScanError) as caught:
+        audit_pool(sorted(str(p) for p in tmp_path.rglob("*.parquet")))
+    message = str(caught.value)
+    for family in ("falcon", "phi", "qwen", "smollm"):
+        assert family in message, f"{family} is not named in the refusal"
+
+
+def test_the_refusal_says_how_to_narrow_the_scan(tmp_path) -> None:
+    """An error that states a rule without stating the fix costs a round trip. The pattern
+    that selects the human pool is the actionable half."""
+    from forge.hard_negative.scan_core import ScanError, audit_pool
+
+    _write_shard(tmp_path / "mirrors" / "part-qwen.parquet", _generated())
+    with pytest.raises(ScanError, match=r"source=\*/split=\*/\*\.parquet"):
+        audit_pool([str(next(tmp_path.rglob("*.parquet")))])
+
+
+def test_a_shard_missing_doc_id_is_refused_on_the_driver(tmp_path) -> None:
+    from forge.hard_negative.scan_core import ScanError, audit_pool
+
+    _write_shard(tmp_path / "part-000.parquet",
+                 {"source_group_id": ["g"], "text": ["t"]})
+    with pytest.raises(ScanError, match="cannot be scanned"):
+        audit_pool([str(tmp_path / "part-000.parquet")])
+
+
+def test_a_file_that_is_not_parquet_is_reported_rather_than_crashing(tmp_path) -> None:
+    """data/reserve/ is gitignored, so a fresh checkout's likeliest contents are a README
+    or a stray download. The audit must say which file and why."""
+    from forge.hard_negative.scan_core import ScanError, audit_pool
+
+    bad = tmp_path / "notes.parquet"
+    bad.write_bytes(b"not parquet at all")
+    with pytest.raises(ScanError, match="could not be opened"):
+        audit_pool([str(bad)])
+
+
+def test_a_clean_human_pool_audits_and_reports_its_rows(tmp_path) -> None:
+    from forge.hard_negative.scan_core import audit_pool
+
+    _write_shard(tmp_path / "a.parquet", _human(4))
+    _write_shard(tmp_path / "b.parquet", _human(6))
+    pool = audit_pool(sorted(str(p) for p in tmp_path.rglob("*.parquet")))
+    assert len(pool.files) == 2
+    assert pool.total_rows == 10
+
+
+def test_the_fingerprint_changes_when_a_shard_is_rewritten_in_place(tmp_path) -> None:
+    """THE HOLE IN MY OWN GATE.
+
+    The first cross-runner check compared `documents_scanned` between the two artifacts,
+    which is a property of the document cap and not of the pool. The Spark sweep ran over 6
+    human shards; the v0.2-min regeneration then added 24 generated shards to the same
+    tree. Both sweeps would have reported 40 documents from different corpora and the gate
+    would have passed. Row counts are in the hash for the same reason: a regeneration
+    rewrites a shard under its own name.
+    """
+    from forge.hard_negative.scan_core import audit_pool
+
+    shard = tmp_path / "a.parquet"
+    _write_shard(shard, _human(4))
+    before = audit_pool([str(shard)]).fingerprint
+
+    _write_shard(shard, _human(9))
+    after = audit_pool([str(shard)]).fingerprint
+
+    assert before != after, "a rewritten shard must not keep its fingerprint"
+
+    _write_shard(tmp_path / "b.parquet", _human(4))
+    with_extra = audit_pool(sorted(str(p) for p in tmp_path.rglob("*.parquet"))).fingerprint
+    assert with_extra != after, "an added shard must not keep the fingerprint"
+
+
+def test_the_fingerprint_is_stable_across_two_audits_of_one_pool(tmp_path) -> None:
+    """It has to be, or the gate it feeds rejects every honest re-run."""
+    from forge.hard_negative.scan_core import audit_pool
+
+    _write_shard(tmp_path / "a.parquet", _human(4))
+    files = sorted(str(p) for p in tmp_path.rglob("*.parquet"))
+    assert audit_pool(files).fingerprint == audit_pool(files).fingerprint
+
+
+def test_plan_scan_selects_only_the_human_shards_when_given_the_pattern(tmp_path) -> None:
+    """The fix for the failed sweep, as an assertion. The default recursive glob takes the
+    generated arms too, which is why the default is not what this repository's own
+    data/silver should be scanned with."""
+    from forge.hard_negative.scan_core import ScanError, plan_scan
+
+    _write_shard(tmp_path / "source=fw" / "split=test" / "part-000.parquet", _human())
+    _write_shard(tmp_path / "mirrors" / "split=test" / "part-qwen.parquet", _generated())
+
+    plan = plan_scan(str(tmp_path), partitions=1, threshold=0.99,
+                     pattern="source=*/split=*/*.parquet")
+    assert len(plan.files) == 1
+    assert plan.pool is not None and plan.pool.total_rows == 3
+
+    with pytest.raises(ScanError, match="GENERATED text"):
+        plan_scan(str(tmp_path), partitions=1, threshold=0.99)
