@@ -8,6 +8,20 @@
  "threshold": 0.99,
  "partitions": 4,
  "files": 6,
+ "pattern": "source=*/split=*/*.parquet",
+ "pool": {
+  "n_files": 6,
+  "total_rows": 60000,
+  "fingerprint": "15737474bd03195a",
+  "files": [
+   "data/silver/source=fw/split=test/part-000.parquet",
+   "data/silver/source=fw/split=train/part-000.parquet",
+   "data/silver/source=fw/split=val/part-000.parquet",
+   "data/silver/source=fwe/split=test/part-000.parquet",
+   "data/silver/source=fwe/split=train/part-000.parquet",
+   "data/silver/source=fwe/split=val/part-000.parquet"
+  ]
+ },
  "total_docs_budget": 40,
  "docs_per_partition_cap": 10,
  "torch_threads_per_partition": 2,
@@ -15,15 +29,15 @@
  "documents_scanned": 40,
  "scoring_errors": 0,
  "above_threshold": 0,
- "wall_seconds": 19.45,
- "documents_per_second_wall": 2.056,
- "documents_per_second_compute": 5.453,
- "startup_seconds": 12.12,
+ "wall_seconds": 32.69,
+ "documents_per_second_wall": 1.224,
+ "documents_per_second_compute": 5.033,
+ "startup_seconds": 24.74,
  "per_partition_seconds": [
-  7.26,
-  7.13,
-  7.34,
-  6.88
+  7.87,
+  7.85,
+  7.95,
+  7.58
  ],
- "skew": 1.026
+ "skew": 1.017
 }

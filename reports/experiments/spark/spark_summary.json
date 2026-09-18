@@ -3,38 +3,50 @@
  "root": "data/silver",
  "is_reserve_pool": false,
  "documents_scanned": 40,
+ "pool": {
+  "n_files": 6,
+  "total_rows": 60000,
+  "fingerprint": "15737474bd03195a",
+  "files": [
+   "data/silver/source=fw/split=test/part-000.parquet",
+   "data/silver/source=fw/split=train/part-000.parquet",
+   "data/silver/source=fw/split=val/part-000.parquet",
+   "data/silver/source=fwe/split=test/part-000.parquet",
+   "data/silver/source=fwe/split=train/part-000.parquet",
+   "data/silver/source=fwe/split=val/part-000.parquet"
+  ]
+ },
  "invariant": "Every partition count scans the SAME total number of documents; the per-partition cap absorbs the difference. Speedup is computed on compute time, which excludes JVM startup and the one model load per process.",
  "caveat": "Spark local mode on one machine. Partitions here are threads sharing RAM and one disk, not executors on separate hosts, so this measures whether the job PARALLELISES, not what a cluster would do. No cluster run exists.",
+ "ideal_speedup": 1.0,
+ "speedup_semantics": "Speedup is measured against the ONE-PARTITION run, and every row uses the same total number of intra-op threads: 10 threads in one partition, 5 in each of two, 2 in each of four. Adding a partition therefore adds no hardware, so the ideal speedup for this sweep is 1.0, not the partition count. A speedup above 1.0 is not parallel efficiency, it is evidence that torch intra-op scaling is sublinear and that several narrow workers beat one wide one. The column this artifact used to carry, speedup divided by partitions, was labelled efficiency and is meaningless under a constant thread budget: the multi_threading sweep returned 114.3% at two partitions, which is arithmetic proof the denominator was wrong.",
  "rows": [
   {
    "partitions": 1,
-   "documents_per_second_compute": 4.328,
-   "documents_per_second_wall": 2.208,
-   "wall_seconds": 18.12,
-   "startup_seconds": 8.87,
+   "documents_per_second_compute": 3.46,
+   "documents_per_second_wall": 1.963,
+   "wall_seconds": 20.37,
+   "startup_seconds": 8.81,
    "speedup": 1.0,
-   "efficiency": 1.0,
    "skew": 1.0
   },
   {
    "partitions": 2,
-   "documents_per_second_compute": 5.671,
-   "documents_per_second_wall": 2.421,
-   "wall_seconds": 16.53,
-   "startup_seconds": 9.47,
-   "speedup": 1.31,
-   "efficiency": 0.655,
-   "skew": 1.031
+   "documents_per_second_compute": 4.894,
+   "documents_per_second_wall": 2.15,
+   "wall_seconds": 18.61,
+   "startup_seconds": 10.43,
+   "speedup": 1.414,
+   "skew": 1.036
   },
   {
    "partitions": 4,
-   "documents_per_second_compute": 5.453,
-   "documents_per_second_wall": 2.056,
-   "wall_seconds": 19.45,
-   "startup_seconds": 12.12,
-   "speedup": 1.26,
-   "efficiency": 0.315,
-   "skew": 1.026
+   "documents_per_second_compute": 5.033,
+   "documents_per_second_wall": 1.224,
+   "wall_seconds": 32.69,
+   "startup_seconds": 24.74,
+   "speedup": 1.455,
+   "skew": 1.017
   }
  ]
 }

@@ -24,7 +24,7 @@ so they were removed rather than left raising.
 | 4 | NVIDIA GPU programming and CUDA | `training/profiling.py` + `scripts/profile_train_step.py`, run on an A100-80GB. Ranked device time committed at `reports/experiments/profile/`. The target is named by measurement, not by guess: `aten::scatter_add_` is **20.87%** of device time, against **4.47%** for `bmm` and `mm` combined. `kernels/cuda/` is still empty. | 7 | profiling **implemented and run**; kernel **not written** |
 | 5 | Distributed training (DeepSpeed, FSDP, Ray) | **All three run, at different levels.** FSDP on 1/2/4 A100-SXM4 at 98.5% and 97.9%; FSDP vs DeepSpeed ZeRO-3 head to head on 2x L40S at a fixed global batch of 64, where DeepSpeed is 8% faster and 16% lighter while scaling 1.5 points worse. Ray Train launches the same job via `TorchTrainer` (`scripts/ray_train_launch.py`), verified on CPU with gloo at 2 workers: **a wiring check, not a benchmark**. `DistributedRun.micro_step` owns the step semantics so the strategies cannot be compared unfairly by accident. | 7 | FSDP + DeepSpeed **measured on GPU**; Ray **launches correctly on CPU**, never on GPU or multi-node |
 | 6 | Inference frameworks (vLLM) | `generation/generators/base.py`: two-pass scheduler holding one engine at a time, GPU preflight, explicit allocator teardown, scheduler invariants under test. Single GPU. | 2 | **implemented** |
-| 7 | Large-scale data processing (Spark, Beam) | **Both, over one scan.** `hard_negative/scan_core.py` is the reserve-pool mining scan: round-robin shard partitioning, model loaded once per worker, a fixed total document budget split across partitions, and a strict refusal to mine from non-reserve roots. `spark_scan.py` distributes it with PySpark `mapPartitions`; `beam_scan.py` distributes it with a Beam pipeline. Neither owns a decision that affects the result, which is what makes the two measurements comparable. The Spark sweep is recorded at `reports/experiments/spark/`; the Beam sweep is not recorded yet, so this row claims the port and not a number. Cleaning stays on Polars, deliberately. | 7 | Spark **implemented and run locally**; Beam **implemented and tested, sweep not yet recorded**; **neither on a cluster or a distributed runner** |
+| 7 | Large-scale data processing (Spark, Beam) | **Both, over one scan.** `hard_negative/scan_core.py` is the reserve-pool mining scan: round-robin shard partitioning, model loaded once per worker, a fixed total document budget split across partitions, and a strict refusal to mine from non-reserve roots. `spark_scan.py` distributes it with PySpark `mapPartitions`; `beam_scan.py` distributes it with a Beam pipeline. Neither owns a decision that affects the result, which is what makes the two measurements comparable. Both sweeps are recorded, over the same 6-shard pool with the same fingerprint, at `reports/experiments/spark/` and `reports/experiments/beam/`. Cleaning stays on Polars, deliberately. | 7 | both **implemented, tested and run locally** over one pinned pool; **neither on a cluster, Dataflow or Flink** |
 | 8 | Orchestration (Airflow) | `orchestration/dags/forge_flywheel.py`: the mining flywheel as a DAG. BashOperator throughout so the scheduler never imports torch at parse time; `catchup=False`, `max_active_runs=1`, no retries on train or gate; every artifact path scoped to the run id. 11 tests in their own CI job so they cannot silently skip. | 8 | DAG **implemented and validated in CI**; **never run against a real corpus** |
 | 9 | MLOps and experiment tracking | `registry/model_registry.py`, W&B config in every training YAML, `MANIFEST.json` dataset versioning | 3 | registry contract implemented |
 | 10 | DevOps tools | `.github/workflows/ci.yml` (lint, tests, spec check, README claim check), `Makefile`, `infra/docker/`, `pyproject.toml`, ruff/mypy/pytest | 0 | **implemented**, and the workflow now actually triggers: it was pinned to a `main` branch this repo does not have |
@@ -84,13 +84,23 @@ per-worker model cache was not thread safe. Both were found on a stub scorer, no
 real arms, so the Beam sweep on this machine is still unrecorded and this section makes no
 throughput claim for it.
 
-**What the local run proved, and what it could not.** On a 10-core machine, scanning a
-fixed 40 documents at 1, 2 and 4 partitions, throughput tops out near 5.5 docs/s however
-the cores are divided, with skew at 1.03. The partitions are balanced; the host is full.
-That is the expected result and it is not evidence for Spark: a single machine
-redistributes cores rather than adding them. The job has never run on a cluster, and
+**What the local runs proved, and what they could not.** On a 10-core machine, scanning a
+fixed 40 documents from the same 6 shards at 1, 2 and 4 partitions, with the total thread
+budget held constant: Spark tops out at 5.03 docs/s, Beam at 5.18 under processes and 6.18
+under threads, with skew between 1.02 and 1.04 throughout. The partitions are balanced and
+the host is full. Both runners find the same ceiling, which is the machine.
+
+They differ in fixed overhead, and the difference runs the other way from the speedups. At
+one partition Spark does 3.46 docs/s against Beam's 2.63, so Beam shows the larger ratio
+(1.97 against 1.46) from the weaker baseline and lands at roughly the same absolute rate.
+Beam's per-element path encodes every record through the Fn API and writes to a file sink;
+`mapPartitions` plus `collect` does not. Publishing the speedup without the throughput would
+have flattered Beam for paying more overhead.
+
+None of this is evidence for either framework. A single machine redistributes cores rather
+than adding them. Neither job has run on a cluster, on Dataflow or on Flink, and
 `data/reserve/` is empty because the corpus is not redistributed, so the 5-million-document
-pool it is built for does not exist here.
+pool both are built for does not exist here.
 
 **The number I nearly reported.** The first sweep left torch at its default 4 threads in
 every arm and showed 1.72x at four partitions. The serial baseline was using 4 of 10 cores

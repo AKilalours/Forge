@@ -261,9 +261,6 @@ def summarise(running_mode: str) -> int:
         "model_loads": runs[p].get("model_loads"),
         "distinct_worker_pids": runs[p].get("distinct_worker_pids"),
         "speedup": round(runs[p]["documents_per_second_compute"] / base, 3) if base else 0.0,
-        "efficiency": (
-            round(runs[p]["documents_per_second_compute"] / base / p, 3) if base else 0.0
-        ),
         "skew": runs[p]["skew"],
     } for p in sorted(runs)]
 
@@ -294,17 +291,21 @@ def summarise(running_mode: str) -> int:
             "column is not comparable to Spark's without reading it. No Dataflow or Flink "
             "run exists."
         ),
+        # WHAT THE SPEEDUP IS AGAINST, and the column that used to be here.
+        "ideal_speedup": 1.0,
+        "speedup_semantics": "Speedup is measured against the ONE-PARTITION run, and every row uses the same total number of intra-op threads: 10 threads in one partition, 5 in each of two, 2 in each of four. Adding a partition therefore adds no hardware, so the ideal speedup for this sweep is 1.0, not the partition count. A speedup above 1.0 is not parallel efficiency, it is evidence that torch intra-op scaling is sublinear and that several narrow workers beat one wide one. The column this artifact used to carry, speedup divided by partitions, was labelled efficiency and is meaningless under a constant thread budget: the multi_threading sweep returned 114.3% at two partitions, which is arithmetic proof the denominator was wrong.",
         "rows": rows,
     }
     path = OUT / "beam_summary.json"
     path.write_text(json.dumps(out, indent=1) + "\n")
     print(f"{'parts':>6} {'docs/s cpu':>11} {'docs/s wall':>12} {'startup s':>10} "
-          f"{'loads':>6} {'pids':>5} {'speedup':>9} {'eff':>7} {'skew':>7}")
+          f"{'loads':>6} {'pids':>5} {'speedup':>9} {'skew':>7}"
+          f"   (ideal speedup is 1.00: threads are held constant)")
     for r in rows:
         print(f"{r['partitions']:>6} {r['documents_per_second_compute']:>11.2f} "
               f"{r['documents_per_second_wall']:>12.2f} {r['startup_seconds']:>10.1f} "
               f"{str(r['model_loads']):>6} {str(r['distinct_worker_pids']):>5} "
-              f"{r['speedup']:>9.2f} {r['efficiency']:>7.1%} {r['skew']:>7.2f}")
+              f"{r['speedup']:>9.2f} {r['skew']:>7.2f}")
     print(f"wrote {path}")
     return 0
 

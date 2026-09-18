@@ -1,12 +1,15 @@
 {
- "mode": "spark local",
+ "mode": "beam fnapirunner multi_processing",
+ "runner": "FnApiRunner",
+ "running_mode": "multi_processing",
  "root": "data/silver",
  "is_reserve_pool": false,
  "mining_candidates_written": false,
  "why": "Timing only. The root is not the reserve pool, so any hit here is a document the model was trained on and is not a mining candidate.",
  "arm": "baseline",
  "threshold": 0.99,
- "partitions": 2,
+ "partitions": 1,
+ "partitions_reporting": 1,
  "files": 6,
  "pattern": "source=*/split=*/*.parquet",
  "pool": {
@@ -23,19 +26,20 @@
   ]
  },
  "total_docs_budget": 40,
- "docs_per_partition_cap": 20,
- "torch_threads_per_partition": 5,
+ "docs_per_partition_cap": 40,
+ "torch_threads_per_partition": 10,
  "host_cpu_count": 10,
  "documents_scanned": 40,
  "scoring_errors": 0,
  "above_threshold": 0,
- "wall_seconds": 18.61,
- "documents_per_second_wall": 2.15,
- "documents_per_second_compute": 4.894,
- "startup_seconds": 10.43,
+ "model_loads": 1,
+ "distinct_worker_pids": 1,
+ "wall_seconds": 25.32,
+ "documents_per_second_wall": 1.58,
+ "documents_per_second_compute": 2.628,
+ "startup_seconds": 10.1,
  "per_partition_seconds": [
-  8.17,
-  7.6
+  15.22
  ],
- "skew": 1.036
+ "skew": 1.0
 }

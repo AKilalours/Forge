@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Tests-1068%20passing-00C853?style=for-the-badge"/>
+  <img src="https://img.shields.io/badge/Tests-1077%20passing-00C853?style=for-the-badge"/>
   <img src="https://img.shields.io/badge/In--distribution%20AUROC-0.99999-00C853?style=for-the-badge"/>
   <img src="https://img.shields.io/badge/FPR%20budget-0.1%25-0056D2?style=for-the-badge"/>
   <img src="https://img.shields.io/badge/Headline-Partial%20null%20result-FF8F00?style=for-the-badge"/>
@@ -483,49 +483,123 @@ still deploys on CPU because 2.5 windows/s is enough for the traffic it has.
 > 0.008 for someone to misread. The flat GPU curve is the control that makes the CPU thread
 > result a property of the hardware rather than an artifact of the harness.
 
-### Spark, and why one machine cannot demonstrate its value
+### Spark and Beam, over one scan, on a machine that cannot demonstrate either
 
-The mining scan is the one job in FORGE shaped for Spark: it reads a reserve pool sized in
-millions, runs one independent forward per document, keeps the small fraction the detector
-is confidently wrong about, and needs no shuffle, no join and no cross-document state.
-`forge/hard_negative/spark_scan.py` is that job.
+The mining scan is the one job in FORGE shaped for a distributed runner: it reads a reserve
+pool sized in millions, runs one independent forward per document, keeps the small fraction
+the detector is confidently wrong about, and needs no shuffle, no join and no
+cross-document state.
 
-Run in Spark **local mode** on a 10-core machine, scanning the same 40 documents at every
-partition count, with the host's cores divided among the partitions so they do not
-oversubscribe:
+It is written once and distributed twice. `forge/hard_negative/scan_core.py` **is** the
+scan: the round-robin shard partitioning, the fixed total document budget, the division of
+cores among partitions, the per-worker model cache, and the refusals. `spark_scan.py`
+hands it to PySpark `mapPartitions`; `beam_scan.py` hands it to a Beam pipeline. Neither
+runner owns a decision that affects the result, which is the only reason the three tables
+below can sit next to each other.
 
-| Partitions | Threads each | Docs/s (compute) | Speedup | Efficiency | Skew |
-|---|---|---|---|---|---|
-| 1 | 10 | 4.33 | 1.00 | 100.0% | 1.00 |
-| 2 | 5 | 5.67 | 1.31 | 65.5% | 1.03 |
-| 4 | 2 | 5.45 | 1.26 | 31.5% | 1.03 |
+All three sweeps read the **same 6 shards, 60,000 rows, fingerprint `15737474bd03195a`**,
+scan the same 40 documents, and use the same total intra-op thread budget: 10 threads in one
+partition, 5 in each of two, 2 in each of four.
 
-Total threads is 10 in every row. **The ceiling is about 5.5 docs/s however the cores are
-sliced.** On one host, Spark partitioning redistributes cores; it does not add any. Two
-partitions of five threads beats one partition of ten, because torch's intra-op scaling is
-sublinear, and past that the gains are gone. Skew stays at 1.03, so the partitions are
-balanced and the machine is simply full.
+**Ideal speedup here is 1.00, not the partition count.** Adding a partition adds no
+hardware, it re-slices the same ten cores. A speedup above 1.00 is not parallel efficiency,
+it is evidence that torch intra-op scaling is sublinear and that several narrow workers beat
+one wide one. There is deliberately no efficiency column; see the note below.
 
-> **The measurement I nearly published instead.** The first sweep left torch at its default
-> 4 threads regardless of partition count, and reported a 1.72x speedup at four partitions.
-> That number was real and meaningless: the serial baseline was using 4 of 10 cores while
-> the parallel arms used more. Handicap the baseline and any parallel speedup looks good.
-> Fixing it made the headline *worse*, from 1.72x to 1.31x, because the baseline improved
-> by 51% and the parallel arms by less. A speedup is a ratio, and a ratio is only as honest
-> as its denominator.
+**Spark, local mode:**
 
-**So the Spark claim this repo makes is narrow.** The job exists, is tested, parallelises
-without skew, and refuses to mine from anything that is not the reserve pool. It has never
-run on a cluster, and `data/reserve/` is empty because the corpus is not redistributed. A
-single host cannot show what Spark is for, and a 1.31x local number is not evidence that it
+| Partitions | Threads each | Docs/s (compute) | Speedup | Skew |
+|---|---|---|---|---|
+| 1 | 10 | 3.46 | 1.00 | 1.00 |
+| 2 | 5 | 4.89 | 1.41 | 1.04 |
+| 4 | 2 | 5.03 | 1.46 | 1.02 |
+
+**Beam, `multi_processing`, the mode Spark local is comparable to:**
+
+<!-- beam-mode: multi_processing -->
+
+| Partitions | Model loads | Docs/s (compute) | Speedup | Skew |
+|---|---|---|---|---|
+| 1 | 1 | 2.63 | 1.00 | 1.00 |
+| 2 | 2 | 3.98 | 1.51 | 1.03 |
+| 4 | 4 | 5.18 | 1.97 | 1.02 |
+
+**Beam, `multi_threading`, where every partition is a thread in one process:**
+
+<!-- beam-threading-mode: multi_threading -->
+
+| Partitions | Loads | Docs/s (compute) | Speedup | Skew |
+|---|---|---|---|---|
+| 1 | 1 | 2.70 | 1.00 | 1.00 |
+| 2 | 1 | 6.18 | 2.29 | 1.04 |
+| 4 | 1 | 5.34 | 1.98 | 1.02 |
+
+**The ceiling is the machine, and both runners find it.** Spark tops out at 5.03 docs/s,
+Beam at 5.18 under processes and 6.18 under threads. Skew stays between 1.02 and 1.04 in
+every row, so the partitions are balanced and the host is simply full. That is the expected
+result for one machine and it is not evidence for either framework.
+
+**Where they disagree is fixed overhead, and reporting speedup alone would flatter Beam.**
+At one partition Spark does 3.46 docs/s and Beam does 2.63, about 25% slower on identical
+work. Beam's per-element path encodes every record through the Fn API and writes results to
+a file sink; Spark's `mapPartitions` plus `collect` does not pay that. So Beam shows the
+larger speedup (1.97 against 1.46) from the weaker baseline and arrives at roughly the same
+absolute rate. The ratio is better and the throughput is not, which is the whole reason both
+columns are published.
+
+**Threads against processes is the clearest thing the port measured.** Under
+`multi_threading` the model loads **once** at every partition count, because scan_core's
+cache is a module-level dict shared by the worker threads, and startup stays flat at 5.5 to
+6.7 seconds. Under `multi_processing` it loads once per worker, 1, 2 then 4 times, and
+startup climbs from 10.1 to 26.5 seconds. For a 40-document job that fixed cost dominates,
+which is why wall-clock throughput *falls* as partitions rise while compute throughput
+climbs. Spark local behaves like the process mode, as it must: 8.8 to 24.7 seconds of
+startup across the same sweep.
+
+> **The column I removed, and the number that forced it.** These sweeps used to publish
+> efficiency, meaning speedup divided by partitions. That is parallel efficiency only when
+> each added partition adds hardware. Here the thread budget is constant, so the correct
+> denominator is 1.0 and the old column was measuring the wrong thing in a plausible-looking
+> way. The `multi_threading` run made it undeniable by returning **114.3%**, which is not a
+> superlinear speedup, it is arithmetic proof of a wrong denominator. The artifacts now
+> carry `ideal_speedup: 1.0` and a `speedup_semantics` string, and the claim checker fails
+> if the word reappears near these tables.
+
+> **The measurement I nearly published before that.** The first sweep left torch at its
+> default 4 threads regardless of partition count and reported 1.72x at four partitions.
+> That number was real and meaningless: the serial baseline used 4 of 10 cores while the
+> parallel arms used more. Fixing it made the headline *worse*, because the baseline
+> improved by 51% and the parallel arms by less. A speedup is a ratio, and a ratio is only
+> as honest as its denominator. Twice now.
+
+**What the port was actually worth, which was not the numbers.** Expressing the same job on
+a second substrate is what tested whether the job was separable from its runner. It was not:
+everything that decided whether the scan finishes was sitting inside a module named after
+Spark, and porting it is what forced `scan_core` to exist. The port also found three defects
+the Spark path could not expose, each of which produced a plausible table rather than an
+error. `--runner=DirectRunner` no longer means the DirectRunner: on Beam 2.76 it resolves to
+a switching runner that prefers Prism, a subprocess that ignores the worker count the sweep
+varies, so the runner is pinned to `FnApiRunner` by name. The per-worker model cache was not
+thread safe, and under the threaded runner four partitions each loaded their own copy of a
+184M parameter model with the cache present and doing nothing. And the first attempt to
+*report* that was wrong in the opposite direction, because a load counter read before and
+after acquiring the scorer credits the load to every thread that merely waited on the lock.
+
+**So the claim this repository makes is narrow.** Both jobs exist, are tested, parallelise
+without skew, refuse to mine from anything that is not the reserve pool, and refuse a pool
+containing generated shards. Neither has run on a cluster, on Dataflow or on Flink, and
+`data/reserve/` is empty because the corpus is not redistributed. A single host re-slices
+cores rather than adding them, so none of these tables is evidence that either framework
 would help at 5M documents. The architecture argument is in
-[`docs/jd_coverage.md`](docs/jd_coverage.md); this table is only evidence that the job runs
-and scales the way its shape predicts.
+[`docs/jd_coverage.md`](docs/jd_coverage.md); these tables are evidence that the job runs
+and scales the way its shape predicts, on two runners, over a pool whose identity is
+recorded rather than assumed.
 
 Records: [`reports/experiments/profile/`](reports/experiments/profile),
 [`reports/experiments/scaling/`](reports/experiments/scaling),
-[`reports/experiments/inference/`](reports/experiments/inference) and
-[`reports/experiments/spark/`](reports/experiments/spark).
+[`reports/experiments/inference/`](reports/experiments/inference),
+[`reports/experiments/spark/`](reports/experiments/spark) and
+[`reports/experiments/beam/`](reports/experiments/beam).
 
 ---
 
@@ -674,7 +748,7 @@ themselves, so there is exactly one of each.
 
 ## 🧪 What the Test Suite Is For
 
-**1068 tests**, and the interesting ones are not unit tests. They are regression tests, each
+**1077 tests**, and the interesting ones are not unit tests. They are regression tests, each
 named after a specific wrong answer this project shipped and then caught:
 
 | Test | The failure it locks out |
@@ -766,7 +840,7 @@ Panagram_Forge/
 ├── reports/experiments/    # every committed run record and score array
 ├── docs/                   # evaluation · writeup · model card · data spec
 ├── demo/                   # held-in AI samples for testing the text tab
-└── tests/unit/             # 1068 tests, most named after a real bug
+└── tests/unit/             # 1077 tests, most named after a real bug
 ```
 
 ---

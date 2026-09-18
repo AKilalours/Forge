@@ -465,15 +465,20 @@ def main(check_test_count: bool = True) -> int:
                     bad.append(f"spark table has {n} partitions, the artifact does not")
                     continue
                 r_ = sp[n]
-                for label, published, stored, pct in [
-                    ("docs/s", cells[1], r_["documents_per_second_compute"], False),
-                    ("speedup", cells[2], r_["speedup"], False),
-                    ("efficiency", cells[3], r_["efficiency"], True),
-                    ("skew", cells[4], r_["skew"], False),
+                # No efficiency column. Every row of this sweep uses the same total
+                # thread budget, so speedup/partitions is not parallel efficiency and the
+                # multi_threading run returned 114.3% of it, which is what made the
+                # mislabelling undeniable. The README publishes speedup against an ideal
+                # of 1.0 and says so.
+                for label, published, stored in [
+                    ("docs/s", cells[1], r_["documents_per_second_compute"]),
+                    ("speedup", cells[2], r_["speedup"]),
+                    ("skew", cells[3], r_["skew"]),
                 ]:
-                    if not close(published, float(stored), percent=pct):
+                    if not close(published, float(stored)):
                         bad.append(f"spark p={n} {label}: README {published!r} vs "
                                    f"artifact {stored!r}")
+
 
     # ---- beam local sweep -----------------------------------------------------
     # Gated on the same terms as the Spark sweep, plus two the Spark table does not need.
@@ -512,14 +517,13 @@ def main(check_test_count: bool = True) -> int:
                     bad.append(f"beam table has {n} partitions, the artifact does not")
                     continue
                 r_ = bm[n]
-                for label, published, stored, pct in [
-                    ("model loads", cells[0], r_["model_loads"], False),
-                    ("docs/s", cells[1], r_["documents_per_second_compute"], False),
-                    ("speedup", cells[2], r_["speedup"], False),
-                    ("efficiency", cells[3], r_["efficiency"], True),
-                    ("skew", cells[4], r_["skew"], False),
+                for label, published, stored in [
+                    ("model loads", cells[0], r_["model_loads"]),
+                    ("docs/s", cells[1], r_["documents_per_second_compute"]),
+                    ("speedup", cells[2], r_["speedup"]),
+                    ("skew", cells[3], r_["skew"]),
                 ]:
-                    if not close(published, float(stored), percent=pct):
+                    if not close(published, float(stored)):
                         bad.append(f"beam p={n} {label}: README {published!r} vs "
                                    f"artifact {stored!r}")
             if spark_path.exists():
@@ -551,6 +555,50 @@ def main(check_test_count: bool = True) -> int:
                         f"{pools[1]}). Same document count, different corpus. Re-run both "
                         f"with the same --root and --pattern."
                     )
+
+    # ---- beam, the second execution mode --------------------------------------
+    # Its own marker and its own header. The two Beam tables started out with the same
+    # header, which table_rows keys on, so the threading rows silently overwrote the
+    # processing rows and the gate checked one artifact against the other table's numbers.
+    # Two tables that mean different things cannot share a header.
+    thr_mode = re.search(r"<!-- beam-threading-mode: (\w+) -->", md)
+    if "| Partitions | Loads |" in md:
+        if thr_mode is None:
+            bad.append("README publishes a second Beam table with no "
+                       "<!-- beam-threading-mode: ... --> marker")
+        else:
+            thr_path = REPORTS / "beam" / thr_mode.group(1) / "beam_summary.json"
+            if not thr_path.exists():
+                bad.append(f"README publishes the {thr_mode.group(1)} Beam sweep but "
+                           f"{thr_path} is missing")
+            else:
+                thr = json.loads(thr_path.read_text())
+                tm = {r["partitions"]: r for r in thr["rows"]}
+                if thr.get("running_mode") != thr_mode.group(1):
+                    bad.append(f"the second Beam table says {thr_mode.group(1)!r} but its "
+                               f"artifact was run as {thr.get('running_mode')!r}")
+                if beam_path is not None and beam_path.exists():
+                    other = json.loads(beam_path.read_text())
+                    if (other.get("pool") or {}).get("fingerprint") != \
+                            (thr.get("pool") or {}).get("fingerprint"):
+                        bad.append("the two Beam modes read different pools, so they are "
+                                   "not two views of one sweep")
+                for row_key, cells in table_rows(md, "| Partitions | Loads |").items():
+                    n = int(row_key)
+                    if n not in tm:
+                        bad.append(f"beam threading table has {n} partitions, the artifact "
+                                   f"does not")
+                        continue
+                    r_ = tm[n]
+                    for label, published, stored in [
+                        ("model loads", cells[0], r_["model_loads"]),
+                        ("docs/s", cells[1], r_["documents_per_second_compute"]),
+                        ("speedup", cells[2], r_["speedup"]),
+                        ("skew", cells[3], r_["skew"]),
+                    ]:
+                        if not close(published, float(stored)):
+                            bad.append(f"beam threading p={n} {label}: README "
+                                       f"{published!r} vs artifact {stored!r}")
 
     # ---- badges --------------------------------------------------------------
     auroc_badge = re.search(r"In--distribution%20AUROC-([\d.]+)-", md)
