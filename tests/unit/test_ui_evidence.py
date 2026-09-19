@@ -237,3 +237,26 @@ def test_the_adversarial_panel_takes_its_caveat_from_the_artifact() -> None:
     assert panel.caveats
     for caveat in panel.caveats:
         assert caveat in blob, "the page must not compose a caveat of its own"
+
+
+def test_the_page_builder_carries_no_measurement_of_its_own() -> None:
+    """Same rule as forge.ui.evidence, for the same reason.
+
+    docs/index.html is generated, so a number can only reach it from an artifact. That
+    holds exactly as long as the builder never contains one. A decimal literal in that
+    file is a figure nobody can trace, sitting on the page a visitor reads first.
+    """
+    import re
+    from pathlib import Path
+
+    builder = Path(__file__).resolve().parents[2] / "scripts" / "build_evidence_page.py"
+    source = builder.read_text()
+    # Format precision (".2f", digits: int = 3) and the chart geometry are not
+    # measurements; scale ticks are the values the axis is drawn to.
+    stripped = re.sub(r'(?m)^\s*#.*$', '', source)
+    stripped = re.sub(r'"""(?:.|\n)*?"""', '', stripped)
+    stripped = re.sub(r"y_ticks=\[[^\]]*\]", "", stripped)
+    stripped = re.sub(r"for t in \([^)]*\)", "", stripped)
+    offenders = [m for m in re.findall(r"\d+\.\d+", stripped)
+                 if m not in {"0.62", "1.0", "0.0"}]
+    assert not offenders, f"the builder carries its own numbers: {offenders}"

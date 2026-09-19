@@ -41,3 +41,6 @@ reports/experiments/profile/*_trace.json
 # Ray Train writes per-run controller state and logs under the storage path. The evidence
 # is reports/experiments/ray/ray_ws*.json; the framework's own bookkeeping is not.
 reports/experiments/ray/ray_results/
+
+# Generated page build artifacts
+.build/

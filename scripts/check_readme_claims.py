@@ -241,7 +241,16 @@ def main(check_test_count: bool = True) -> int:
     """check_test_count is False when called from inside pytest, because the count is
     obtained BY running pytest and a test that spawns the collector it is running under
     is slow at best and recursive at worst."""
-    md = (ROOT / "README.md").read_text()
+    # BOTH FILES. The long-form tables moved to docs/evidence.md when the README was cut
+    # to one screen, and every check below is keyed on a table header. Reading only the
+    # README would have left those checks matching nothing and passing silently, which is
+    # the failure mode this whole script exists to prevent, arriving through the front
+    # door.
+    md = "\n".join(
+        (ROOT / name).read_text()
+        for name in ("README.md", "docs/evidence.md")
+        if (ROOT / name).exists()
+    )
     bad: list[str] = []
 
     # ---- out-of-distribution table -----------------------------------------
@@ -599,6 +608,60 @@ def main(check_test_count: bool = True) -> int:
                         if not close(published, float(stored)):
                             bad.append(f"beam threading p={n} {label}: README "
                                        f"{published!r} vs artifact {stored!r}")
+
+    # ---- the README headline table ---------------------------------------------
+    # The README was cut from 880 lines to one screen, and the six figures that survived
+    # the cut are the ones a visitor actually reads. Every other check here is keyed on a
+    # table header that moved to docs/evidence.md, so without this block the most-read
+    # numbers in the repository would have been the only ungated ones.
+    head = "| | AUROC in distribution | AUROC on HC3 | Missed on HC3, at its own threshold |"
+    if head in md:
+        ood_cells = {(c["arm"], c["benchmark"]): c
+                     for c in load("ood_summary.json")["cells"]}
+        for label, arm_key, arm in (("Random prompts", "A", "baseline"),
+                                    ("Matched mirrors", "B", "mirror")):
+            row = re.search(rf"^\|\s*\*{{0,2}}{re.escape(label)}\*{{0,2}}\s*\|(.+)$",
+                            md, re.M)
+            if row is None:
+                bad.append(f"README headline table has no row for {label}")
+                continue
+            published = [c.strip().strip("*") for c in row.group(1).split("|") if c.strip()]
+            if len(published) != 3:
+                bad.append(f"README headline row {label} has {len(published)} cells, not 3")
+                continue
+            cell = ood_cells[(arm, "hc3")]
+            for name, shown, stored, as_pct in (
+                ("in-distribution AUROC", published[0], summary(arm_key)["val"]["auroc"],
+                 False),
+                ("HC3 AUROC", published[1], cell["auroc_mean_pooled"], False),
+                ("HC3 miss rate", published[2], cell["deployed"]["fnr"], True),
+            ):
+                if not close(shown, float(stored), percent=as_pct):
+                    bad.append(f"README headline {label} {name}: README {shown!r} vs "
+                               f"artifact {stored!r}")
+
+    # ---- the generated page ---------------------------------------------------
+    # docs/index.html is built from the artifacts by scripts/build_evidence_page.py, so it
+    # cannot state a figure they do not have. What it CAN do is go stale: an artifact
+    # changes, nobody rebuilds, and the published page keeps showing the old run with no
+    # sign that it is out of date. A rebuild is deterministic, so a byte comparison settles
+    # it. This is the same contract as the README checks, enforced the cheaper way.
+    page = ROOT / "docs" / "index.html"
+    if page.exists():
+        import subprocess
+
+        before = page.read_text()
+        build = subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "build_evidence_page.py")],
+            capture_output=True, text=True, cwd=ROOT)
+        if build.returncode != 0:
+            bad.append(f"docs/index.html could not be rebuilt: {build.stderr.strip()}")
+        elif page.read_text() != before:
+            bad.append(
+                "docs/index.html is stale: rebuilding it from the artifacts produces "
+                "different output. Run scripts/build_evidence_page.py and commit the "
+                "result."
+            )
 
     # ---- badges --------------------------------------------------------------
     auroc_badge = re.search(r"In--distribution%20AUROC-([\d.]+)-", md)
