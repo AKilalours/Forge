@@ -371,7 +371,9 @@ def evaluate(
             "excluded from the scores and counted separately. Every condition carries its "
             "own clean_fnr because folding and casefolding move clean documents too, and a "
             "defence is only worth adopting if it lowers the attacked FNR by more than it "
-            "raises the clean one."
+            "raises the clean one. Every rate here is measured on AI documents only; the "
+            "human cost of each condition is under human_cost, and a condition that lowers "
+            "the miss rate by moving every score has not defended anything."
         ),
         "results": [r.as_dict() for r in results],
     }, indent=2) + "\n")

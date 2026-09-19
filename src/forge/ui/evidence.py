@@ -277,7 +277,8 @@ def spark_panel(*, root: Path | None = None) -> Panel:
         sources=(_rel(path),),
         status=MEASURED,
         headline=headline,
-        columns=("partitions", "docs/s compute", "docs/s wall", "wall s", "startup s", "speedup", "efficiency"),
+        columns=("partitions", "docs/s compute", "docs/s wall", "wall s", "startup s",
+                 "speedup"),
         rows=tuple(
             (
                 _num(r.get("partitions")),
@@ -286,11 +287,123 @@ def spark_panel(*, root: Path | None = None) -> Panel:
                 _num(r.get("wall_seconds")),
                 _num(r.get("startup_seconds")),
                 f"{_num(r.get('speedup'))}x",
-                _pct(r.get("efficiency")),
             )
             for r in rows
         ),
-        caveats=tuple(t for t in (data.get("invariant"), data.get("caveat")) if t),
+        caveats=tuple(t for t in (data.get("invariant"), data.get("caveat"),
+                                  data.get("speedup_semantics")) if t),
+    )
+
+
+def beam_panel(mode: str, *, root: Path | None = None) -> Panel:
+    """The same scan on a second runner. One panel per execution mode, because threads in
+    one process and separate worker processes pay different startup costs for identical
+    throughput, and averaging them would hide the only thing the port measured."""
+    path = (root or EXPERIMENTS) / "beam" / mode / "beam_summary.json"
+    key, title = f"beam-{mode}", f"The same scan on Beam ({mode})"
+    data, status = load(path)
+    if data is None:
+        return _absent(key, title, (_rel(path),), status)
+
+    rows = data.get("rows", [])
+    pool = data.get("pool") or {}
+    headline = (
+        f"{data.get('documents_scanned')} documents per configuration from the same "
+        f"{pool.get('n_files')} shards (pool {pool.get('fingerprint')}), so this table and "
+        f"the Spark one are timed over identical work."
+    )
+    return Panel(
+        key=key,
+        title=title,
+        sources=(_rel(path),),
+        status=MEASURED,
+        headline=headline,
+        columns=("partitions", "docs/s compute", "docs/s wall", "startup s",
+                 "model loads", "worker pids", "speedup"),
+        rows=tuple(
+            (
+                _num(r.get("partitions")),
+                _num(r.get("documents_per_second_compute")),
+                _num(r.get("documents_per_second_wall")),
+                _num(r.get("startup_seconds")),
+                _num(r.get("model_loads")),
+                _num(r.get("distinct_worker_pids")),
+                f"{_num(r.get('speedup'))}x",
+            )
+            for r in rows
+        ),
+        caveats=tuple(t for t in (data.get("invariant"), data.get("caveat"),
+                                  data.get("speedup_semantics")) if t),
+    )
+
+
+def adversarial_panel(experiment: str, *, root: Path | None = None) -> Panel:
+    """Where the detector fails, and what preprocessing does about it.
+
+    Only the attacks that move the needle are rendered. Most of the cells are zero in every
+    condition, and a table of zeros buries the handful of rows that matter.
+    """
+    path = (root or EXPERIMENTS) / f"adversarial_{experiment}.json"
+    key, title = f"adversarial-{experiment}", f"Adversarial evasion, {experiment}"
+    data, status = load(path)
+    if data is None:
+        return _absent(key, title, (_rel(path),), status)
+
+    conditions = data.get("conditions_scored") or ["raw", "normalised"]
+
+    def fnr(result: dict, condition: str) -> float | None:
+        """Read one condition's miss rate, from either artifact generation.
+
+        THE FALLBACK, and the reason fnr_raw and fnr_preprocessed were kept when the
+        conditions block was added. An artifact written before that change has no
+        `conditions` key, so a reader that only knows the new shape finds nothing, renders
+        an empty table, and still reports the panel as measured. A stale artifact must
+        degrade to fewer columns, never to a confident blank.
+        """
+        block = (result.get("conditions") or {}).get(condition)
+        if block is not None:
+            return block.get("fnr")
+        legacy = {"raw": "fnr_raw", "normalised": "fnr_preprocessed"}.get(condition)
+        return result.get(legacy) if legacy else None
+
+    if not any("conditions" in r for r in data.get("results", [])):
+        conditions = ["raw", "normalised"]
+
+    live = [r for r in data.get("results", [])
+            if any(fnr(r, c) for c in conditions)]
+    live.sort(key=lambda r: -max((fnr(r, c) or 0) for c in conditions))
+
+    worst = live[0] if live else {}
+    headline = (
+        f"{data.get('n_ai_documents')} AI test documents at the deployed threshold "
+        f"{_num(data.get('threshold'), 6)}. Worst evasion: {worst.get('attack')} at "
+        f"severity {worst.get('severity')} reaching "
+        f"{_num(fnr(worst, 'normalised'), 3)} "
+        f"miss rate after production normalisation."
+    ) if live else "No attack moved the miss rate in any condition."
+
+    return Panel(
+        key=key,
+        title=title,
+        sources=(_rel(path),),
+        status=MEASURED,
+        headline=headline,
+        columns=("attack", "severity", *conditions),
+        rows=tuple(
+            (
+                str(r.get("attack")),
+                _num(r.get("severity")),
+                *(_num(fnr(r, c), 3) for c in conditions),
+            )
+            for r in live
+        ),
+        # FROM THE ARTIFACT ONLY. The first version of this panel appended a sentence
+        # written here, about the miss rate being AI-only. It was true and it was the wrong
+        # place: a caveat composed by the page can say anything, including something the
+        # run did not do. test_every_caveat_appears_verbatim_in_the_artifact_it_came_from
+        # caught it. The sentence moved into the note the CLI writes, where it is part of
+        # the record rather than part of the presentation.
+        caveats=tuple(t for t in (data.get("note"),) if t),
     )
 
 
@@ -343,6 +456,10 @@ def build_panels(*, root: Path | None = None) -> list[Panel]:
         serving_panel("cuda", root=root),
         threads_panel(root=root),
         spark_panel(root=root),
+        beam_panel("multi_processing", root=root),
+        beam_panel("multi_threading", root=root),
+        adversarial_panel("forge_min_baseline", root=root),
+        adversarial_panel("forge_min_mirror", root=root),
         ray_panel(root=root),
     ]
     for panel in panels:
@@ -351,7 +468,33 @@ def build_panels(*, root: Path | None = None) -> list[Panel]:
                 f"panel {panel.key!r} renders a table with no caveat from its artifact; "
                 "add the condition to the artifact rather than removing this check"
             )
+        _refuse_dead_columns(panel)
     return panels
+
+
+def _refuse_dead_columns(panel: Panel) -> None:
+    """A column whose every cell is a placeholder is a column the artifact no longer has.
+
+    THE SILENT REGRESSION THIS EXISTS TO CATCH, and it had already happened. The partition
+    sweeps used to publish an `efficiency` field. It was removed from the artifacts when it
+    turned out to be meaningless under a constant thread budget, and nothing told this
+    module: _num and _pct turn a missing key into "-", so the panel kept rendering an
+    efficiency column of three dashes. No error, no failing test, just a column that looks
+    like a measurement which happened to be unavailable.
+
+    The caveat guard above catches a table that overstates its result. This catches a table
+    that quietly stopped having one.
+    """
+    if not panel.has_rows:
+        return
+    for index, column in enumerate(panel.columns):
+        values = {row[index] for row in panel.rows}
+        if values <= {"-", "", "-x"}:
+            raise AssertionError(
+                f"panel {panel.key!r} column {column!r} is empty in every row, which means "
+                f"its artifact no longer carries that field. Remove the column or restore "
+                f"the field; do not leave a placeholder where a number used to be."
+            )
 
 
 def measured(panels: list[Panel]) -> list[Panel]:

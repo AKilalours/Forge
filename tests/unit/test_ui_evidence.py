@@ -96,8 +96,12 @@ def test_the_guard_fires_when_an_artifact_loses_its_condition(tmp_path, monkeypa
     """
     src = evidence.EXPERIMENTS / "spark" / "spark_summary.json"
     data = json.loads(src.read_text())
-    data.pop("invariant", None)
-    data.pop("caveat", None)
+    # Every key that can supply a condition, not just the two this artifact had when the
+    # test was written. speedup_semantics was added later and is a legitimate condition, so
+    # leaving it in would let the artifact lose its invariant while the guard stayed quiet,
+    # which is the exact failure this test exists to prevent.
+    for condition_key in ("invariant", "caveat", "speedup_semantics"):
+        data.pop(condition_key, None)
     target = tmp_path / "spark"
     target.mkdir()
     (target / "spark_summary.json").write_text(json.dumps(data))
@@ -131,3 +135,105 @@ def test_panel_is_immutable():
     panel = Panel(key="k", title="t", sources=("s",), status=MISSING, headline="h")
     with pytest.raises(dataclasses.FrozenInstanceError):
         panel.headline = "something else"  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# THE COLUMN THAT OUTLIVED ITS FIELD.
+#
+# The partition sweeps published an `efficiency` field. It was removed from the artifacts
+# when it turned out to be meaningless under a constant thread budget, and nothing told
+# this module: _num and _pct turn a missing key into "-", so the Spark panel kept rendering
+# an efficiency column of three dashes. No error, no failing test, just a column that looked
+# like a measurement which happened to be unavailable.
+#
+# The caveat guard catches a table that overstates its result. This catches one that
+# quietly stopped having a result at all.
+# ---------------------------------------------------------------------------
+
+
+def test_a_column_that_is_empty_in_every_row_is_refused() -> None:
+    from forge.ui.evidence import Panel, _refuse_dead_columns
+
+    panel = Panel(
+        key="example", title="t", sources=("a.json",), status="measured", headline="h",
+        columns=("partitions", "gone"),
+        rows=(("1", "-"), ("2", "-")),
+        caveats=("a condition",),
+    )
+    with pytest.raises(AssertionError, match="no longer carries that field"):
+        _refuse_dead_columns(panel)
+
+
+def test_a_column_with_one_real_value_is_allowed() -> None:
+    """A genuinely missing cell is normal. A column that is missing in EVERY row is the
+    signal, because that is what a removed field looks like."""
+    from forge.ui.evidence import Panel, _refuse_dead_columns
+
+    panel = Panel(
+        key="example", title="t", sources=("a.json",), status="measured", headline="h",
+        columns=("partitions", "sometimes"),
+        rows=(("1", "-"), ("2", "0.5")),
+        caveats=("a condition",),
+    )
+    _refuse_dead_columns(panel)
+
+
+def test_the_spark_panel_no_longer_advertises_efficiency() -> None:
+    """Under a constant thread budget the ideal speedup is 1.0, so speedup divided by
+    partitions is not parallel efficiency. The artifact dropped it; the panel must not
+    still promise it."""
+    from forge.ui.evidence import spark_panel
+
+    assert "efficiency" not in spark_panel().columns
+
+
+def test_both_runners_have_a_panel() -> None:
+    """The Beam port is a committed result. A page that shows only the Spark sweep claims
+    less than the repository has measured."""
+    from forge.ui.evidence import build_panels
+
+    keys = {p.key for p in build_panels()}
+    assert "spark" in keys
+    assert "beam-multi_processing" in keys
+    assert "beam-multi_threading" in keys
+
+
+def test_the_adversarial_panel_reads_an_artifact_from_either_generation(tmp_path) -> None:
+    """THE STALE-SCHEMA FALLBACK.
+
+    fnr_raw and fnr_preprocessed were deliberately kept when the per-condition block was
+    added. An artifact written before that change has no `conditions` key, and a reader
+    that only knows the new shape finds nothing, renders an empty table, and still reports
+    the panel as measured. A stale artifact must degrade to fewer columns, never to a
+    confident blank.
+    """
+    import json
+
+    from forge.ui.evidence import adversarial_panel
+
+    (tmp_path / "adversarial_old.json").write_text(json.dumps({
+        "n_ai_documents": 500, "threshold": 0.9,
+        "note": "a condition from the artifact",
+        "results": [{"attack": "case_perturb", "severity": 0.1,
+                     "fnr_raw": 0.9, "fnr_preprocessed": 0.9}],
+    }))
+    panel = adversarial_panel("old", root=tmp_path)
+    assert panel.columns == ("attack", "severity", "raw", "normalised")
+    assert panel.rows, "an older artifact must still render its rows"
+    assert panel.rows[0][0] == "case_perturb"
+
+
+def test_the_adversarial_panel_takes_its_caveat_from_the_artifact() -> None:
+    """A miss rate without the human cost reads as a free defence, so the table must carry
+    that condition. It must come from the run's own note: a caveat composed by the page can
+    say anything, including something the run did not do."""
+
+    from forge.ui.evidence import EXPERIMENTS, adversarial_panel
+
+    panel = adversarial_panel("forge_min_baseline")
+    if not panel.has_rows:
+        pytest.skip("no adversarial artifact in this checkout")
+    blob = (EXPERIMENTS / "adversarial_forge_min_baseline.json").read_text()
+    assert panel.caveats
+    for caveat in panel.caveats:
+        assert caveat in blob, "the page must not compose a caveat of its own"
