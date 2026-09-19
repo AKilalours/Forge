@@ -361,7 +361,9 @@ def evaluate(
         "n_ai_documents": len(ai),
         "split": "test",
         "conditions_scored": list(results[0].fnr) if results else [],
-        "human_cost": {c: {"fpr": round(v.fpr, 6), "n_human": v.n_human}
+        "human_cost": {c: {"fpr": round(v.fpr, 6), "n_human": v.n_human,
+                           "median": round(v.median, 6), "p95": round(v.p95, 6),
+                           "p99": round(v.p99, 6), "max": round(v.maximum, 6)}
                        for c, v in cost.items()},
         "note": (
             "delta-FNR against the clean baseline MEASURED UNDER THE SAME CONDITION, not "

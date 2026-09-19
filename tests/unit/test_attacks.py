@@ -490,5 +490,82 @@ def test_the_cost_line_states_its_own_resolution() -> None:
                           attacks=["homoglyph_substitute"],
                           human_texts=["plain human text here."] * 4)
     rendered = render_cost(cost)
-    assert "RESOLUTION IS 1/4" in rendered
+    assert "resolution 1/4" in rendered
     assert "0.001" in rendered, "the budget it cannot confirm has to be named"
+    assert "score distribution" in rendered, (
+        "naming the limit is not enough. The line has to point at the column that does "
+        "carry the information, or a reader takes four zeros as four safe options."
+    )
+
+
+class _ScoreShiftingDetector:
+    """Scores everything at 0.9 except under a named transform, where it scores 0.98.
+
+    The failure the thresholded rate cannot see. At a threshold of 0.99 both conditions
+    report an FPR of exactly 0.0000, and one of them has moved every human document to
+    within a hundredth of the decision boundary.
+    """
+
+    def __init__(self, inflated_marker: str) -> None:
+        self.marker = inflated_marker
+
+    def __call__(self, texts: list[str]) -> list[float]:
+        return [0.98 if self.marker in t else 0.9 for t in texts]
+
+
+def test_a_transform_that_moves_scores_without_crossing_is_visible_in_the_percentiles() -> None:
+    """THE RESOLUTION PROBLEM, as a test.
+
+    The real run printed fpr=0.0000 for all four conditions on 500 human documents and was
+    read as four equally safe options. It could not have said anything else: 1/500 cannot
+    resolve a budget of 0.001, and a condition that moved every human score to just below
+    the threshold prints the same zero as one that changed nothing. The distribution says
+    what the rate cannot.
+    """
+    from forge.adversarial.lab import run_attacks
+
+    texts, ids = _corpus()
+    # casefolded lowercases, so a marker in uppercase survives every condition except that
+    # one, which is how this detector distinguishes them.
+    human = ["HUMAN TEXT ABOUT WEATHER."] * 20
+    _, cost = run_attacks(
+        texts, ids, _ScoreShiftingDetector("HUMAN"), 0.99,
+        attacks=["homoglyph_substitute"], human_texts=human,
+        conditions=("normalised", "casefolded"),
+    )
+    assert cost["normalised"].fpr == 0.0
+    assert cost["casefolded"].fpr == 0.0, "neither condition crosses the threshold"
+    assert cost["normalised"].p99 > cost["casefolded"].p99, (
+        "the uppercase marker survives normalisation and is destroyed by casefolding, so "
+        "the two conditions must differ in the distribution even though their thresholded "
+        "rates are identical"
+    )
+
+
+def test_the_reported_percentiles_are_scores_documents_actually_received() -> None:
+    """Nearest-rank, no interpolation. An interpolated p99 is a number no document scored,
+    which is a poor thing to compare an operating point against."""
+    from forge.adversarial.lab import ConditionCost
+
+    scores = [0.1, 0.2, 0.3, 0.4, 0.9]
+    cost = ConditionCost.from_scores(scores, threshold=0.99)
+    for value in (cost.median, cost.p95, cost.p99, cost.maximum):
+        assert value in scores, f"{value} is not a score any document received"
+    assert cost.maximum == 0.9
+    assert cost.fpr == 0.0
+
+
+def test_the_cost_table_reports_every_condition_with_its_distribution() -> None:
+    from forge.adversarial.lab import render_cost, run_attacks
+
+    texts, ids = _corpus()
+    _, cost = run_attacks(texts, ids, CharacterSensitiveDetector(), 0.5,
+                          attacks=["homoglyph_substitute"],
+                          conditions=("raw", "normalised", "folded"),
+                          human_texts=["plain human text here."] * 8)
+    rendered = render_cost(cost)
+    for column in ("fpr", "median", "p95", "p99", "max"):
+        assert column in rendered
+    for condition in ("raw", "normalised", "folded"):
+        assert condition in rendered
+    assert "against the normalised row" in rendered

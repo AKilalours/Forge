@@ -12,6 +12,7 @@ columns describe the model, and the `preprocessed` one is the production number.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -23,7 +24,7 @@ from forge.adversarial.attacks import (
     preserves_meaning,
 )
 from forge.cleaning.normalize import normalize
-from forge.evaluation.metrics import false_negative_rate, false_positive_rate
+from forge.evaluation.metrics import false_negative_rate
 
 # THE CONDITIONS, each of which is a deployment choice rather than a variation on one.
 #
@@ -83,15 +84,54 @@ DEFAULT_CONDITIONS = ("raw", "normalised")
 
 @dataclass(frozen=True)
 class ConditionCost:
-    """What a condition does to HUMAN documents, at the deployed threshold.
+    """What a condition does to HUMAN documents, at the deployed threshold and below it.
 
     Measured once per run, not per attack, because it does not depend on the attack: it is
-    the price of the transform itself. `fpr` at the fitted threshold is the number that
-    says whether a condition can be deployed at all.
+    the price of the transform itself.
+
+    WHY THE THRESHOLDED RATE IS NOT ENOUGH, which the first version of this got wrong.
+    `fpr` counts human documents above a fixed threshold, so its resolution is 1/n: at 500
+    documents every condition that is better than 1-in-500 prints 0.0000, including a
+    condition that moved every human score most of the way to the threshold. The deployed
+    budget is 0.001, which 500 documents cannot resolve at all, so a table of zeros was
+    read as four conditions being equally safe when it only said none of them was
+    catastrophic.
+
+    The score distribution needs no threshold and has real power at this n. If a transform
+    inflates scores, the upper percentiles of the human distribution move even when not one
+    document crosses. p99 and the maximum are where a 0.001 budget actually lives, so they
+    are the numbers to compare across conditions, and the comparison is against the
+    normalised condition rather than against zero.
     """
 
     fpr: float
     n_human: int
+    median: float
+    p95: float
+    p99: float
+    maximum: float
+
+    @staticmethod
+    def from_scores(scores: list[float], threshold: float) -> ConditionCost:
+        import statistics
+
+        ordered = sorted(scores)
+        n = len(ordered)
+
+        def pct(q: float) -> float:
+            if not ordered:
+                return 0.0
+            # Nearest-rank. No interpolation, so every reported value is a score some
+            # document actually received.
+            return ordered[min(n - 1, max(0, math.ceil(q * n) - 1))]
+
+        return ConditionCost(
+            fpr=sum(1 for x in ordered if x >= threshold) / n if n else 0.0,
+            n_human=n,
+            median=statistics.median(ordered) if ordered else 0.0,
+            p95=pct(0.95), p99=pct(0.99),
+            maximum=ordered[-1] if ordered else 0.0,
+        )
 
 
 @dataclass
@@ -201,15 +241,9 @@ def run_attacks(
 
     cost: dict[str, ConditionCost] = {}
     if human_texts:
-        human_labels = [0] * len(human_texts)
         for c in conditions:
-            cost[c] = ConditionCost(
-                fpr=false_positive_rate(
-                    human_labels,
-                    score_fn([CONDITIONS[c](t) for t in human_texts]),
-                    threshold),
-                n_human=len(human_texts),
-            )
+            cost[c] = ConditionCost.from_scores(
+                score_fn([CONDITIONS[c](t) for t in human_texts]), threshold)
 
     out: list[AttackResult] = []
     for name in names:
@@ -258,15 +292,24 @@ def render_cost(cost: dict[str, ConditionCost]) -> str:
                 "from a real defence. Pass human documents before trusting a new "
                 "condition.")
     n = next(iter(cost.values())).n_human
-    body = ", ".join(f"{c}={v.fpr:.4f}" for c, v in cost.items())
-    return (
-        f"false positive rate on {n} human documents at the deployed threshold: {body}"
-        f"\n  A condition whose FPR rises has not defended anything, it has moved the "
-        f"operating point."
-        f"\n  RESOLUTION IS 1/{n} = {1 / n:.4f}. This cannot confirm an FPR budget of "
-        f"0.001 and is not trying to; it is here to catch a transform whose FPR is not "
-        f"small, which is what perfect FNR across every attack actually looks like."
-    )
+    lines = [
+        f"human documents scored per condition: {n}. FPR at the deployed threshold has "
+        f"resolution 1/{n} = {1 / n:.4f}, which cannot resolve the 0.001 budget, so the "
+        f"score distribution is the column that carries the information.",
+        f"{'condition':<14}{'fpr':>9}{'median':>11}{'p95':>11}{'p99':>11}{'max':>11}",
+        "-" * 67,
+    ]
+    for c, v in cost.items():
+        lines.append(f"{c:<14}{v.fpr:>9.4f}{v.median:>11.4f}{v.p95:>11.4f}"
+                     f"{v.p99:>11.4f}{v.maximum:>11.4f}")
+    base = cost.get("normalised")
+    if base is not None:
+        lines.append(
+            "  Read the upper percentiles against the normalised row, not against zero. A "
+            "transform that moves p99 or the maximum toward the threshold has moved the "
+            "operating point even while its FPR still prints 0.0000."
+        )
+    return "\n".join(lines)
 
 
 def render_table(results: list[AttackResult]) -> str:
