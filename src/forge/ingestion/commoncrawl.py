@@ -69,6 +69,42 @@ class CrawlStreamError(RuntimeError):
     """A segment did not stream to a clean end, so its record count cannot be trusted."""
 
 
+def _transport_errors() -> tuple[type[BaseException], ...]:
+    """Every exception a mid-stream network failure can surface as, as one tuple.
+
+    THIS LIST IS WHY A 284-SEGMENT RUN DIED AT MINUTE 37. The first version caught
+    (ArchiveLoadFailed, EOFError, OSError, gzip.BadGzipFile), which looks exhaustive and
+    is not: urllib3's ProtocolError inherits from urllib3.exceptions.HTTPError, which
+    inherits from Exception, NOT from OSError. A dropped connection therefore raised
+    something no clause here matched, escaped stream_segment without being converted to
+    CrawlStreamError, and sailed straight through the retry loop that exists for exactly
+    this failure. The retry was correct; the exception list was wrong.
+
+    Resolved lazily and tolerantly: urllib3 and requests are import-time optional here
+    (a local segment needs neither), and a version that renames an exception must not
+    take the module down with it.
+    """
+    errors: list[type[BaseException]] = [EOFError, OSError, gzip.BadGzipFile]
+    for module_name, names in (
+        ("urllib3.exceptions", ("HTTPError",)),
+        ("requests.exceptions", ("RequestException",)),
+        ("warcio.exceptions", ("ArchiveLoadFailed",)),
+        ("http.client", ("HTTPException",)),
+    ):
+        try:
+            module = __import__(module_name, fromlist=list(names))
+        except ImportError:                       # pragma: no cover - optional dependency
+            continue
+        for name in names:
+            found = getattr(module, name, None)
+            if isinstance(found, type) and issubclass(found, BaseException):
+                errors.append(found)
+    return tuple(errors)
+
+
+TRANSPORT_ERRORS = _transport_errors()
+
+
 @dataclass(frozen=True)
 class Segment:
     """One WET or WARC file in one crawl. The unit of parallel work."""
@@ -184,7 +220,6 @@ def stream_segment(
     """
     try:
         from warcio.archiveiterator import ArchiveIterator
-        from warcio.exceptions import ArchiveLoadFailed
     except ImportError as error:  # pragma: no cover - environment, not logic
         raise RuntimeError(
             "Parsing Common Crawl archives needs warcio, in the `data` extra. "
@@ -212,7 +247,7 @@ def stream_segment(
                 built = _record_to_raw(record, segment, fmt, acquired)
                 if built is not None:
                     yield built
-        except (ArchiveLoadFailed, EOFError, OSError, gzip.BadGzipFile) as error:
+        except TRANSPORT_ERRORS as error:
             # Kept, because warcio DOES raise on some malformed framing. It just does
             # not raise on the common case, which is why the byte check below exists.
             raise CrawlStreamError(

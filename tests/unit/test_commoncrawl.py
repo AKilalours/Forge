@@ -207,3 +207,54 @@ def test_stream_stops_at_the_limit(monkeypatch):
     source = CommonCrawlSource("CC-MAIN-2026-05", segment_paths_override=["a/one.wet.gz"])
 
     assert len(list(source.stream(limit=3))) == 3
+
+
+def test_a_urllib3_protocol_error_is_converted_not_leaked(monkeypatch):
+    """The regression that killed a 284-segment run at minute 37.
+
+    urllib3.exceptions.ProtocolError does not inherit from OSError. The first version of
+    the guard listed (ArchiveLoadFailed, EOFError, OSError, BadGzipFile), so a dropped
+    connection raised something no clause matched, escaped stream_segment without being
+    converted, and went straight through the retry loop written for exactly this failure.
+    The retry was fine. The exception list was wrong.
+    """
+    urllib3 = pytest.importorskip("urllib3")
+
+    body = _wet([("https://a.example/", "Body." * 100, None)])
+
+    class _Broken(io.BytesIO):
+        def read(self, size=-1):
+            raise urllib3.exceptions.ProtocolError(
+                "Connection broken: IncompleteRead(62323511 bytes read, 3189908 more expected)"
+            )
+
+    class _Response:
+        def __init__(self) -> None:
+            self.raw = _Broken(body)
+            self.status_code = 200
+            self.headers = {"Content-Length": str(len(body))}
+
+        def raise_for_status(self):
+            return None
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+    monkeypatch.setattr(
+        "forge.ingestion.commoncrawl._requests",
+        lambda: type("R", (), {"get": staticmethod(lambda url, **kw: _Response())}),
+    )
+
+    with pytest.raises(CrawlStreamError, match="failed to parse"):
+        list(stream_segment(SEGMENT))
+
+
+def test_the_transport_error_list_covers_the_library_actually_used():
+    # A rename upstream would silently shrink this tuple back to the shape that leaked.
+    urllib3 = pytest.importorskip("urllib3")
+    from forge.ingestion.commoncrawl import TRANSPORT_ERRORS
+
+    assert issubclass(urllib3.exceptions.ProtocolError, TRANSPORT_ERRORS)

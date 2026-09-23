@@ -70,6 +70,13 @@ def spark_session(partitions: int):
         .appName(f"forge-crawl-p{partitions}")
         .master(f"local[{partitions}]")
         .config("spark.python.worker.reuse", "true")
+        # A SECOND NET UNDER THE PER-SEGMENT RETRY. Spark local mode defaults
+        # spark.task.maxFailures to 1, so one task failure aborts the whole job: a
+        # 284-segment run died at minute 37 that way. The per-segment retry in
+        # clean_segment is the first defence and should catch a dropped connection now
+        # that it sees the right exception type; this catches whatever it does not, at
+        # the cost of re-streaming that one bucket rather than the run.
+        .config("spark.task.maxFailures", "4")
         .config("spark.ui.enabled", "false")
         .getOrCreate()
     )
