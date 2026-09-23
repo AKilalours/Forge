@@ -750,7 +750,7 @@ themselves, so there is exactly one of each.
 
 ## 🧪 What the Test Suite Is For
 
-**1126 tests**, and the interesting ones are not unit tests. They are regression tests, each
+**1157 tests**, and the interesting ones are not unit tests. They are regression tests, each
 named after a specific wrong answer this project shipped and then caught:
 
 | Test | The failure it locks out |
@@ -842,7 +842,7 @@ Panagram_Forge/
 ├── reports/experiments/    # every committed run record and score array
 ├── docs/                   # evaluation · writeup · model card · data spec
 ├── demo/                   # held-in AI samples for testing the text tab
-└── tests/unit/             # 1126 tests, most named after a real bug
+└── tests/unit/             # 1157 tests, most named after a real bug
 ```
 
 ---
