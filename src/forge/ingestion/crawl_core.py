@@ -62,7 +62,13 @@ from pathlib import Path
 from typing import Any
 
 from forge.cleaning.pipeline import Cleaner, CleaningPolicy
-from forge.ingestion.commoncrawl import FORMATS, CommonCrawlSource, Segment, stream_segment
+from forge.ingestion.commoncrawl import (
+    FORMATS,
+    CommonCrawlSource,
+    CrawlStreamError,
+    Segment,
+    stream_segment,
+)
 
 SOURCE_ID = "cc"
 
@@ -195,7 +201,8 @@ def policy_record(policy: CleaningPolicy) -> dict:
 
 # ----------------------------------------------------------------------- stage 1: clean
 
-def clean_segment(path: str, plan: CrawlPlan, policy: CleaningPolicy) -> Iterator[dict]:
+def clean_segment(path: str, plan: CrawlPlan, policy: CleaningPolicy,
+                  retries: int = 2) -> Iterator[dict]:
     """Every document one segment yields, cleaned but NOT deduplicated.
 
     `policy` is required, not defaulted. See the module docstring: the default policy is
@@ -209,27 +216,69 @@ def clean_segment(path: str, plan: CrawlPlan, policy: CleaningPolicy) -> Iterato
     reports nothing about what it rejected leaves the pipeline unable to tell "this
     segment was mostly non-English" from "this segment failed".
     """
-    cleaner = Cleaner(policy, dedup=False)
     segment = Segment(crawl=plan.crawl, path=path)
     started = time.perf_counter()
-    kept = 0
 
-    for document in cleaner.process(stream_segment(segment, fmt=plan.fmt)):
-        kept += 1
-        row = document.model_dump(mode="json", by_alias=True)
-        row["record_type"] = "document"
-        yield row
+    # RETRIED, AND BUFFERED UNTIL THE SEGMENT COMPLETES. Two things forced this shape.
+    #
+    # A 284-segment run is an hour of continuous streaming, and one dropped connection
+    # raises CrawlStreamError, which without a retry takes the whole run with it after
+    # fifty minutes of work. The completeness check is right to be loud; it just must not
+    # be fatal on the first try.
+    #
+    # And a retry cannot resume mid-segment: the records already yielded from the failed
+    # attempt would be yielded again by the next one, and they would not be duplicates of
+    # each other in the dedup stage either, because dedup keeps one copy of each hash and
+    # would simply hide the double read. So an attempt's output is held until the segment
+    # finishes, and a failed attempt's partial output is discarded rather than emitted.
+    # A segment is a couple of thousand kept documents at most, so the memory is bounded.
+    last_error: Exception | None = None
+    for attempt in range(retries + 1):
+        cleaner = Cleaner(policy, dedup=False)
+        rows: list[dict] = []
+        try:
+            for document in cleaner.process(stream_segment(segment, fmt=plan.fmt)):
+                row = document.model_dump(mode="json", by_alias=True)
+                row["record_type"] = "document"
+                rows.append(row)
+        except CrawlStreamError as error:
+            last_error = error
+            time.sleep(min(2 ** attempt, 8))
+            continue
 
-    stats = cleaner.stats.as_dict()
-    stats.update({
+        yield from rows
+        stats = cleaner.stats.as_dict()
+        stats.update({
+            "record_type": "stats",
+            "segment": path,
+            "kept": len(rows),
+            "attempts": attempt + 1,
+            "failed": False,
+            "seconds": round(time.perf_counter() - started, 3),
+            "pid": os.getpid(),
+            "fingerprint": plan.fingerprint,
+        })
+        yield stats
+        return
+
+    # Out of retries. The run continues, because losing 283 good segments to one bad one
+    # is worse, but the failure is recorded per segment and the CLI exits non-zero. A
+    # corpus built from fewer segments than were planned must say so: its size is not
+    # reproducible from the plan alone.
+    yield {
         "record_type": "stats",
         "segment": path,
-        "kept": kept,
+        "seen": 0,
+        "kept": 0,
+        "rejected": {},
+        "dedup_applied": False,
+        "attempts": retries + 1,
+        "failed": True,
+        "error": f"{type(last_error).__name__}: {last_error}",
         "seconds": round(time.perf_counter() - started, 3),
         "pid": os.getpid(),
         "fingerprint": plan.fingerprint,
-    })
-    yield stats
+    }
 
 
 def is_stats(row: dict) -> bool:
@@ -381,10 +430,13 @@ def merge_stats(records: Iterable[dict]) -> dict:
     seen = kept = 0
     rejected: Counter = Counter()
     segments: list[str] = []
+    failed: list[dict] = []
     pids: set[int] = set()
     seconds: list[float] = []
 
     for record in records:
+        if record.get("failed"):
+            failed.append({"segment": record.get("segment"), "error": record.get("error")})
         seen += record.get("seen", 0)
         kept += record.get("kept", 0)
         segments.append(record.get("segment", ""))
@@ -393,7 +445,8 @@ def merge_stats(records: Iterable[dict]) -> dict:
         rejected.update(record.get("rejected") or {})
 
     return {
-        "segments_read": len([s for s in segments if s]),
+        "segments_read": len([s for s in segments if s]) - len(failed),
+        "segments_failed": failed,
         "documents_seen": seen,
         "documents_kept_before_dedup": kept,
         "rejected": dict(sorted(rejected.items())),

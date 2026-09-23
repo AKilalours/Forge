@@ -52,6 +52,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--training-root", type=Path, default=REPO / "data" / "silver")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--dataset-version", default="v0.2-reserve")
+    parser.add_argument("--retries", type=int, default=2,
+                        help="attempts per segment before it is recorded as failed")
     parser.add_argument("--report-dir", type=Path, default=REPO / "reports" / "experiments" / "crawl")
     args = parser.parse_args(argv)
 
@@ -111,6 +113,20 @@ def main(argv: list[str] | None = None) -> int:
 
     print(json.dumps({k: v for k, v in report.items() if k != "segment_paths"}, indent=2))
     print(f"report: {report_path}")
+
+    failed = report.get("segments_failed") or []
+    if failed:
+        # The corpus is still written and still usable: losing every good segment to one
+        # bad one would be worse. But its size cannot be reproduced from the plan, so the
+        # exit code says so, and the failed paths are printed ready to feed back in
+        # through --paths-file.
+        print(f"\n{len(failed)} of {len(plan.segments)} segments failed after retries:",
+              file=sys.stderr)
+        for entry in failed:
+            print(f"  {entry['segment']}  {entry['error']}", file=sys.stderr)
+        print("re-run just these with --paths-file and a separate --out, then merge.",
+              file=sys.stderr)
+        return 1
     return 0
 
 

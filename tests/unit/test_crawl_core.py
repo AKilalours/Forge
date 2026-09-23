@@ -23,8 +23,10 @@ from pathlib import Path
 import pytest
 
 from forge.cleaning.pipeline import Cleaner, CleaningPolicy
+from forge.ingestion.commoncrawl import CrawlStreamError, stream_segment
 from forge.ingestion.crawl_core import (
     CrawlError,
+    is_stats,
     Resolution,
     build_report,
     clean_segment,
@@ -355,3 +357,66 @@ def test_a_report_that_does_not_add_up_is_refused(segments, policy):
 
 def test_corpus_fingerprint_ignores_order():
     assert corpus_fingerprint(["b", "a"]) == corpus_fingerprint(["a", "b"])
+
+
+# ------------------------------------------------------------------ transient failures
+
+def _flaky(failures: int):
+    """A stream_segment that raises CrawlStreamError `failures` times, then succeeds."""
+    state = {"calls": 0}
+    real = stream_segment
+
+    def wrapped(segment, **kwargs):
+        state["calls"] += 1
+        if state["calls"] <= failures:
+            # Yield one record first, so the partial output of a failed attempt is real
+            # and would be visible if it were not discarded.
+            yield next(iter(real(segment, **kwargs)))
+            raise CrawlStreamError("stopped mid-stream (simulated)")
+        yield from real(segment, **kwargs)
+
+    return wrapped, state
+
+
+def test_a_segment_that_fails_once_is_retried(monkeypatch, segments, policy):
+    # An hour-long run meets a dropped connection eventually. Without a retry, fifty
+    # minutes of good work is lost to one bad minute.
+    wrapped, state = _flaky(1)
+    monkeypatch.setattr("forge.ingestion.crawl_core.stream_segment", wrapped)
+    plan = plan_crawl(CRAWL, paths=segments)
+
+    rows = list(clean_segment(segments[0], plan, policy))
+
+    assert state["calls"] == 2
+    assert rows[-1]["failed"] is False and rows[-1]["attempts"] == 2
+
+
+def test_a_failed_attempt_emits_nothing(monkeypatch, segments, policy):
+    """The reason an attempt's output is buffered rather than streamed.
+
+    A retry cannot resume mid-segment, so records from the failed attempt would be read
+    twice. Dedup would keep one copy of each and the double read would leave no trace,
+    making the corpus smaller than the counts claim with nothing to show for it.
+    """
+    wrapped, _ = _flaky(1)
+    monkeypatch.setattr("forge.ingestion.crawl_core.stream_segment", wrapped)
+    plan = plan_crawl(CRAWL, paths=segments)
+
+    documents = [r for r in clean_segment(segments[0], plan, policy) if not is_stats(r)]
+
+    assert len(documents) == len({d["doc_id"] for d in documents})
+
+
+def test_a_segment_that_never_recovers_is_recorded_not_raised(monkeypatch, segments, policy,
+                                                              training_root, tmp_path):
+    wrapped, _ = _flaky(99)
+    monkeypatch.setattr("forge.ingestion.crawl_core.stream_segment", wrapped)
+    plan = plan_crawl(CRAWL, paths=segments)
+
+    report = run_serial(plan, tmp_path / "out", policy, training_hashes(training_root), )
+
+    # 283 good segments must not be lost to one bad one, and the loss must be visible:
+    # a corpus built from fewer segments than planned is not reproducible from the plan.
+    assert report["segments_read"] == 0
+    assert len(report["segments_failed"]) == 2
+    assert "stopped mid-stream" in report["segments_failed"][0]["error"]
