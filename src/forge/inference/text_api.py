@@ -25,8 +25,15 @@ ABSTENTION = (
 )
 
 
-def analyse(text: str) -> dict:
-    """Score with BOTH arms and report them side by side.
+def analyse(text: str, arms: tuple[str, ...] | None = None) -> dict:
+    """Score with BOTH arms by default and report them side by side.
+
+    `arms` narrows that to a subset, and exists for one host rather than as a feature: on
+    Streamlit Community Cloud two float32 arms at 701 MB each, plus torch, plus the page,
+    do not fit in about 2.7 GB, and the failure mode is the container being killed
+    mid-request, which a reader cannot interpret. A page that holds one arm and says so is
+    honest; one that is killed is not. The default is unchanged, so the FastAPI reference
+    page and the tests still score both.
 
     Both rather than one, because the comparison IS the project. A single verdict hides the
     thing the experiment measured, and the arms genuinely disagree near the threshold: on
@@ -40,11 +47,16 @@ def analyse(text: str) -> dict:
     from forge.inference.decision import decide
     from forge.inference.scorer import ARMS, ArmUnavailable, load_arm
 
+    selected = tuple(arms) if arms else ARMS
+    unknown = [a for a in selected if a not in ARMS]
+    if unknown:
+        raise ValueError(f"unknown arm(s) {unknown}, expected a subset of {ARMS}")
+
     words = len(text.split())
     arms: list[dict] = []
     unavailable: dict[str, str] = {}
 
-    for name in ARMS:
+    for name in selected:
         try:
             arm = load_arm(name)
             scored = arm.score(text)

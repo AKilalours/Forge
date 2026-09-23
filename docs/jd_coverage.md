@@ -18,15 +18,16 @@ so they were removed rather than left raising.
 
 | # | Requirement | Where in FORGE | Phase | State |
 |---|---|---|---|---|
-| 1 | Python and modern ML frameworks | whole `src/forge` tree, PyTorch + HF Transformers | 3 | scaffolded |
-| 2 | Transformers and LLM fundamentals | `modeling/encoder.py` (encoder + dual head), `modeling/windowing.py` (overlapping windows), `generation/` (decoding grid, sampling) | 3 | windowing implemented and tested; model planned |
+| 1 | Python and modern ML frameworks | whole `src/forge` tree, PyTorch + HF Transformers, 1123 tests | 3 | **implemented**: two arms trained end to end on A100 and L40S, evaluated in and out of distribution |
+| 2 | Transformers and LLM fundamentals | `modeling/encoder.py` (DeBERTa-v3 encoder, masked mean pooling, document + token heads), `modeling/windowing.py` (overlapping 512-token windows), `generation/` (decoding grid, chat templates) | 3 | **implemented**: both arms trained, in-distribution AUROC 0.99999, HC3 0.796 with 40% calibration error |
 | 3 | Research and engineering boundaries | `docs/data_spec_v1.md` (frozen contract), `evaluation/release_gate.py`, `configs/eval/regimes.yaml` | 0 | **implemented** |
 | 4 | NVIDIA GPU programming and CUDA | `training/profiling.py` + `scripts/profile_train_step.py`, run on an A100-80GB. Ranked device time committed at `reports/experiments/profile/`. The target is named by measurement, not by guess: `aten::scatter_add_` is **20.87%** of device time, against **4.47%** for `bmm` and `mm` combined. `kernels/cuda/` is still empty. | 7 | profiling **implemented and run**; kernel **not written** |
 | 5 | Distributed training (DeepSpeed, FSDP, Ray) | **All three run, at different levels.** FSDP on 1/2/4 A100-SXM4 at 98.5% and 97.9%; FSDP vs DeepSpeed ZeRO-3 head to head on 2x L40S at a fixed global batch of 64, where DeepSpeed is 8% faster and 16% lighter while scaling 1.5 points worse. Ray Train launches the same job via `TorchTrainer` (`scripts/ray_train_launch.py`), verified on CPU with gloo at 2 workers: **a wiring check, not a benchmark**. `DistributedRun.micro_step` owns the step semantics so the strategies cannot be compared unfairly by accident. | 7 | FSDP + DeepSpeed **measured on GPU**; Ray **launches correctly on CPU**, never on GPU or multi-node |
 | 6 | Inference frameworks (vLLM) | `generation/generators/base.py`: two-pass scheduler holding one engine at a time, GPU preflight, explicit allocator teardown, scheduler invariants under test. Single GPU. | 2 | **implemented** |
 | 7 | Large-scale data processing (Spark, Beam) | **Both, over one scan.** `hard_negative/scan_core.py` is the reserve-pool mining scan: round-robin shard partitioning, model loaded once per worker, a fixed total document budget split across partitions, and a strict refusal to mine from non-reserve roots. `spark_scan.py` distributes it with PySpark `mapPartitions`; `beam_scan.py` distributes it with a Beam pipeline. Neither owns a decision that affects the result, which is what makes the two measurements comparable. Both sweeps are recorded, over the same 6-shard pool with the same fingerprint, at `reports/experiments/spark/` and `reports/experiments/beam/`. Cleaning stays on Polars, deliberately. | 7 | both **implemented, tested and run locally** over one pinned pool; **neither on a cluster, Dataflow or Flink** |
+| 7b | Mining the internet at scale | `ingestion/commoncrawl.py` streams Common Crawl WET segments (no download, byte-level completeness check against Content-Length); `ingestion/crawl_core.py` is the runner-independent ingest and `spark_crawl.py` / `beam_crawl.py` distribute it. Cleaning is per document, deduplication is a shuffle on content hash, and the reserve pool excludes anything whose hash is already in training. Measured on one real segment: 20,614 records in, 353 documents kept at the v0.1-min policy, 114 s. | 7 | **implemented and measured on one segment**; the full pool is not built yet |
 | 8 | Orchestration (Airflow) | `orchestration/dags/forge_flywheel.py`: the mining flywheel as a DAG. BashOperator throughout so the scheduler never imports torch at parse time; `catchup=False`, `max_active_runs=1`, no retries on train or gate; every artifact path scoped to the run id. 11 tests in their own CI job so they cannot silently skip. | 8 | DAG **implemented and validated in CI**; **never run against a real corpus** |
-| 9 | MLOps and experiment tracking | `registry/model_registry.py`, W&B config in every training YAML, `MANIFEST.json` dataset versioning | 3 | registry contract implemented |
+| 9 | MLOps and experiment tracking | `registry/model_registry.py`, W&B in every training YAML, `MANIFEST.json` dataset versioning, and a CI claim gate that fails the build when a figure in the README disagrees with the JSON artifact that produced it | 3 | **implemented**, and the claim gate has caught real drift |
 | 10 | DevOps tools | `.github/workflows/ci.yml` (lint, tests, spec check, README claim check), `Makefile`, `infra/docker/`, `pyproject.toml`, ruff/mypy/pytest | 0 | **implemented**, and the workflow now actually triggers: it was pinned to a `main` branch this repo does not have |
 | 11 | Cloud infrastructure (AWS/GCP) | `infra/docker/`, `infra/terraform/` (README only), S3/MinIO storage layout in spec section 8. Compute ran on RunPod; the app deploys on Streamlit Community Cloud. | 7 and 8 | planned |
 
@@ -81,8 +82,10 @@ exists. The port also found two defects the Spark path could not expose, both of
 produced a plausible table rather than an error, and both of which are written up in
 `beam_scan.py`: `--runner=DirectRunner` no longer means the DirectRunner, and the
 per-worker model cache was not thread safe. Both were found on a stub scorer, not on the
-real arms, so the Beam sweep on this machine is still unrecorded and this section makes no
-throughput claim for it.
+real arms. The sweep has since been run on the real arms over a pinned pool, and its
+numbers are in the next paragraph. (This sentence previously said the Beam sweep was
+unrecorded and claimed nothing, which contradicted the paragraph below it for as long as
+both were on the page.)
 
 **What the local runs proved, and what they could not.** On a 10-core machine, scanning a
 fixed 40 documents from the same 6 shards at 1, 2 and 4 partitions, with the total thread

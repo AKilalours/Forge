@@ -561,6 +561,53 @@ Records: [`reports/experiments/profile/`](reports/experiments/profile),
 
 ---
 
+## 🛡️ Adversarial: what breaks the detector, and what fixes it for free
+
+Four preprocessing conditions, each scored against **its own** clean baseline, because folding and casefolding move clean documents too and a defence that lowers the attacked miss rate by moving everything is not a defence. 250 AI documents per arm, 1,000 human documents for the cost side. Artifacts: [`adversarial_forge_min_baseline.json`](../reports/experiments/adversarial_forge_min_baseline.json), [`adversarial_forge_min_mirror.json`](../reports/experiments/adversarial_forge_min_mirror.json).
+
+**forge_min_baseline@8e06099f**, threshold 0.996586
+
+| Attack | Severity | raw | normalised | folded | casefolded |
+|---|---|---|---|---|---|
+| `homoglyph_substitute` | 0.2 | 0.316 | 0.316 | 0.000 | 0.000 |
+| `case_perturb` | 0.02 | 0.016 | 0.016 | 0.016 | 0.000 |
+| `case_perturb` | 0.1 | 0.980 | 0.980 | 0.980 | 0.000 |
+
+Human score distribution over 1,000 documents (the FPR column is 0.0000 in every condition, which at 1/1000 resolution says almost nothing; the distribution is what carries the information):
+
+| Condition | median | p95 | p99 | max |
+|---|---|---|---|---|
+| raw | 0.000025 | 0.000075 | 0.000169 | 0.0267 |
+| normalised | 0.000025 | 0.000075 | 0.000169 | 0.0267 |
+| folded | 0.000025 | 0.000075 | 0.000169 | 0.0267 |
+| casefolded | 0.000021 | 0.000042 | 0.000066 | 0.0013 |
+
+**forge_min_mirror@8e06099f**, threshold 0.998252
+
+| Attack | Severity | raw | normalised | folded | casefolded |
+|---|---|---|---|---|---|
+| `homoglyph_substitute` | 0.2 | 0.252 | 0.252 | 0.000 | 0.000 |
+| `case_perturb` | 0.02 | 0.012 | 0.012 | 0.012 | 0.000 |
+| `case_perturb` | 0.1 | 0.876 | 0.876 | 0.876 | 0.000 |
+
+Human score distribution over 1,000 documents (the FPR column is 0.0000 in every condition, which at 1/1000 resolution says almost nothing; the distribution is what carries the information):
+
+| Condition | median | p95 | p99 | max |
+|---|---|---|---|---|
+| raw | 0.000043 | 0.000232 | 0.002872 | 0.9769 |
+| normalised | 0.000043 | 0.000232 | 0.002872 | 0.9769 |
+| folded | 0.000043 | 0.000232 | 0.002872 | 0.9769 |
+| casefolded | 0.000037 | 0.000183 | 0.001275 | 0.7915 |
+
+### Three readings
+
+**Folding confusables is free, and it closes the homoglyph attack completely.** The `folded` column is identical to `normalised` at every statistic on both arms, so it costs nothing, and it takes `homoglyph_substitute` at severity 0.2 to a miss rate of 0.000. NFKC alone does not: Cyrillic а and Latin a are different characters that NFKC is correct to leave alone, and TR39 confusable folding is the step that maps them together.
+
+**Casefolding is not score inflation, and I expected it to be.** My hypothesis was that its perfect zeros came from pushing every score up. They come from pushing the human distribution DOWN on both arms (baseline max 0.0267 to 0.0013, mirror 0.9769 to 0.7915). The hypothesis was wrong twice: first at 500 human documents where the instrument had no power, then again at 1,000 where it did. It stays unrecommended until the out-of-distribution sweep is re-run with the threshold refitted, because a transform that moves every score needs a refitted threshold before it means anything.
+
+**The mirror arm has a human document at 0.9769 against a threshold of 0.998252.** The baseline arm's worst human document scores 0.0267, nowhere near its own threshold. Same 1,000 documents, same conditions. The mirror arm is the one that wins on out-of-distribution AUROC, and this is what that win costs: its margin against a false positive is about a hundredth, not a whole number. That is a property of the arm, not of any attack, and it belongs beside the AUROC whenever the AUROC is quoted.
+
+---
 ## 🖥️ The Interface
 
 Two shells over the same detectors: a FastAPI reference page and a Streamlit page that is
@@ -568,18 +615,15 @@ what deploys. Both render the same cards from the same payload against the same 
 so they cannot drift into disagreeing with each other. The captures below are from the
 reference page.
 
-<div align="center">
-<img src="images/text_verdict.png" width="92%" alt="Text tab: both arms scored side by side"/>
-<br/>
-<em>Both arms scored on the same document. The headline is the deployed arm; the other sits
-beside it because the comparison IS the experiment. Every number a verdict rests on is on
-screen: the threshold, the budget it was fitted at, and that arm's validation FNR and ECE.</em>
-</div>
+<!-- The text-tab capture is deliberately absent. The only one ever taken was at commit
+4ec8204c against threshold 0.996956, and those checkpoints were retracted when the chat
+template defect was found. A screenshot of withdrawn numbers is worse than no screenshot.
+A fresh capture goes here once the live demo serves the current checkpoints. -->
 
 <br/>
 
 <div align="center">
-<img src="images/image_verdict.png" width="92%" alt="Image tab: verdict, evidence and file signals"/>
+<img src="../images/image_verdict.png" width="92%" alt="Image tab: verdict, evidence and file signals"/>
 <br/>
 <em>Declaration-first verdict logic. The detector's own probability leads the evidence panel,
 supporting signals report a word rather than a percentage, and nothing here is combined into
@@ -589,7 +633,7 @@ a single invented score.</em>
 <br/>
 
 <div align="center">
-<img src="images/image_robustness.png" width="92%" alt="Robustness across eleven transforms"/>
+<img src="../images/image_robustness.png" width="92%" alt="Robustness across eleven transforms"/>
 <br/>
 <em>Eleven edits an image meets in the wild, each re-scored and compared against the
 original. "flipped" means that transform changes the answer. This asks whether the VERDICT
@@ -599,7 +643,7 @@ survives redistribution, which is a different question from whether a forensic s
 <br/>
 
 <div align="center">
-<img src="images/image_attribution.png" width="92%" alt="Occlusion attribution"/>
+<img src="../images/image_attribution.png" width="92%" alt="Occlusion attribution"/>
 <br/>
 <em>Occlusion attribution in the model's own preprocessed tensor space: each region is
 hidden and the image re-scored, so a warm cell is one the decision actually rested on.
@@ -706,7 +750,7 @@ themselves, so there is exactly one of each.
 
 ## 🧪 What the Test Suite Is For
 
-**1077 tests**, and the interesting ones are not unit tests. They are regression tests, each
+**1126 tests**, and the interesting ones are not unit tests. They are regression tests, each
 named after a specific wrong answer this project shipped and then caught:
 
 | Test | The failure it locks out |
@@ -798,7 +842,7 @@ Panagram_Forge/
 ├── reports/experiments/    # every committed run record and score array
 ├── docs/                   # evaluation · writeup · model card · data spec
 ├── demo/                   # held-in AI samples for testing the text tab
-└── tests/unit/             # 1077 tests, most named after a real bug
+└── tests/unit/             # 1126 tests, most named after a real bug
 ```
 
 ---

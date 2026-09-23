@@ -89,6 +89,12 @@ def text_tab() -> None:
         placeholder="Paste text to analyse. A few paragraphs works best; very short "
                     "passages carry little signal.",
     )
+    arm = st.radio(
+        "Arm", ("mirror", "baseline"), horizontal=True,
+        help="One at a time. Switching evicts the other rather than accumulating, because "
+             "two arms do not fit in this host's memory. The two-arm comparison is in "
+             "docs/evaluation.md.",
+    )
     if not st.button("Analyse text", type="primary"):
         return
     if not text.strip():
@@ -98,17 +104,19 @@ def text_tab() -> None:
     from forge.inference.text_api import analyse
     from forge.ui.render import text_result
 
-    # BOTH ARMS, as on the reference page, because the comparison is the experiment. Each is
-    # roughly 740 MB in float32 and this host allows about 2.7 GB, so the second one may not
-    # fit. analyse() reports that per arm rather than failing the request, and the page then
-    # shows the arm it has and says only one is loaded. Fetching is per arm and cached, so
-    # the first analysis pays for the download and later ones do not.
-    with st.spinner("Loading the arms and scoring. The first run fetches 1.5 GB of weights."):
-        for arm in ("mirror", "baseline"):
-            failure = ensure_weights(arm)
-            if failure:
-                st.warning(f"could not fetch the {arm} checkpoint: {failure}")
-        payload = analyse(text)
+    # ONE ARM, which is what this module's docstring has always said this page does. It
+    # previously loaded both: 701 MB each in float32, plus torch, plus the page, against a
+    # host that allows about 2.7 GB. That does not fail cleanly, it gets the container
+    # killed mid-request, and the visitor sees "Oh no. Error running app." with no reason.
+    # The two-arm comparison IS the experiment's result, and it is reported in
+    # docs/evaluation.md, where a measured comparison belongs. A live page is not where
+    # that finding lives.
+    with st.spinner(f"Loading the {arm} arm and scoring. The first run fetches its weights."):
+        failure = ensure_weights(arm)
+        if failure:
+            st.error(f"could not fetch the {arm} checkpoint: {failure}")
+            return
+        payload = analyse(text, arms=(arm,))
 
     show(text_result(payload), height=1180)
 

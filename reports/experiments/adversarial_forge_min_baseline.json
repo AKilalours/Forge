@@ -1,0 +1,231 @@
+{
+  "experiment": "forge_min_baseline",
+  "model_version": "forge_min_baseline@8e06099f",
+  "threshold": 0.996586,
+  "fpr_budget": 0.001,
+  "n_ai_documents": 250,
+  "split": "test",
+  "conditions_scored": [
+    "raw",
+    "normalised",
+    "folded",
+    "casefolded"
+  ],
+  "human_cost": {
+    "raw": {
+      "fpr": 0.0,
+      "n_human": 1000,
+      "median": 2.5e-05,
+      "p95": 7.5e-05,
+      "p99": 0.000169,
+      "max": 0.026672
+    },
+    "normalised": {
+      "fpr": 0.0,
+      "n_human": 1000,
+      "median": 2.5e-05,
+      "p95": 7.5e-05,
+      "p99": 0.000169,
+      "max": 0.026672
+    },
+    "folded": {
+      "fpr": 0.0,
+      "n_human": 1000,
+      "median": 2.5e-05,
+      "p95": 7.5e-05,
+      "p99": 0.000169,
+      "max": 0.026672
+    },
+    "casefolded": {
+      "fpr": 0.0,
+      "n_human": 1000,
+      "median": 2.1e-05,
+      "p95": 4.2e-05,
+      "p99": 6.6e-05,
+      "max": 0.00133
+    }
+  },
+  "note": "delta-FNR against the clean baseline MEASURED UNDER THE SAME CONDITION, not against one global baseline. No-ops and attacks failing preserves_meaning are excluded from the scores and counted separately. Every condition carries its own clean_fnr because folding and casefolding move clean documents too, and a defence is only worth adopting if it lowers the attacked FNR by more than it raises the clean one.",
+  "results": [
+    {
+      "attack": "homoglyph_substitute",
+      "severity": 0.01,
+      "defused_by_preprocessing": false,
+      "clean_fnr": 0.0,
+      "fnr_raw": 0.0,
+      "fnr_preprocessed": 0.0,
+      "delta_fnr_raw": 0.0,
+      "delta_fnr_preprocessed": 0.0,
+      "preprocessing_benefit": 0.0,
+      "n_scored": 250,
+      "n_noop": 0,
+      "n_invalid": 0,
+      "conditions": {
+        "raw": {
+          "fnr": 0.0,
+          "clean_fnr": 0.0,
+          "delta_fnr": 0.0
+        },
+        "normalised": {
+          "fnr": 0.0,
+          "clean_fnr": 0.0,
+          "delta_fnr": 0.0
+        },
+        "folded": {
+          "fnr": 0.0,
+          "clean_fnr": 0.0,
+          "delta_fnr": 0.0
+        },
+        "casefolded": {
+          "fnr": 0.0,
+          "clean_fnr": 0.0,
+          "delta_fnr": 0.0
+        }
+      }
+    },
+    {
+      "attack": "homoglyph_substitute",
+      "severity": 0.05,
+      "defused_by_preprocessing": false,
+      "clean_fnr": 0.0,
+      "fnr_raw": 0.0,
+      "fnr_preprocessed": 0.0,
+      "delta_fnr_raw": 0.0,
+      "delta_fnr_preprocessed": 0.0,
+      "preprocessing_benefit": 0.0,
+      "n_scored": 250,
+      "n_noop": 0,
+      "n_invalid": 0,
+      "conditions": {
+        "raw": {
+          "fnr": 0.0,
+          "clean_fnr": 0.0,
+          "delta_fnr": 0.0
+        },
+        "normalised": {
+          "fnr": 0.0,
+          "clean_fnr": 0.0,
+          "delta_fnr": 0.0
+        },
+        "folded": {
+          "fnr": 0.0,
+          "clean_fnr": 0.0,
+          "delta_fnr": 0.0
+        },
+        "casefolded": {
+          "fnr": 0.0,
+          "clean_fnr": 0.0,
+          "delta_fnr": 0.0
+        }
+      }
+    },
+    {
+      "attack": "homoglyph_substitute",
+      "severity": 0.2,
+      "defused_by_preprocessing": false,
+      "clean_fnr": 0.0,
+      "fnr_raw": 0.316,
+      "fnr_preprocessed": 0.316,
+      "delta_fnr_raw": 0.316,
+      "delta_fnr_preprocessed": 0.316,
+      "preprocessing_benefit": 0.0,
+      "n_scored": 250,
+      "n_noop": 0,
+      "n_invalid": 0,
+      "conditions": {
+        "raw": {
+          "fnr": 0.316,
+          "clean_fnr": 0.0,
+          "delta_fnr": 0.316
+        },
+        "normalised": {
+          "fnr": 0.316,
+          "clean_fnr": 0.0,
+          "delta_fnr": 0.316
+        },
+        "folded": {
+          "fnr": 0.0,
+          "clean_fnr": 0.0,
+          "delta_fnr": 0.0
+        },
+        "casefolded": {
+          "fnr": 0.0,
+          "clean_fnr": 0.0,
+          "delta_fnr": 0.0
+        }
+      }
+    },
+    {
+      "attack": "case_perturb",
+      "severity": 0.02,
+      "defused_by_preprocessing": false,
+      "clean_fnr": 0.0,
+      "fnr_raw": 0.016,
+      "fnr_preprocessed": 0.016,
+      "delta_fnr_raw": 0.016,
+      "delta_fnr_preprocessed": 0.016,
+      "preprocessing_benefit": 0.0,
+      "n_scored": 250,
+      "n_noop": 0,
+      "n_invalid": 0,
+      "conditions": {
+        "raw": {
+          "fnr": 0.016,
+          "clean_fnr": 0.0,
+          "delta_fnr": 0.016
+        },
+        "normalised": {
+          "fnr": 0.016,
+          "clean_fnr": 0.0,
+          "delta_fnr": 0.016
+        },
+        "folded": {
+          "fnr": 0.016,
+          "clean_fnr": 0.0,
+          "delta_fnr": 0.016
+        },
+        "casefolded": {
+          "fnr": 0.0,
+          "clean_fnr": 0.0,
+          "delta_fnr": 0.0
+        }
+      }
+    },
+    {
+      "attack": "case_perturb",
+      "severity": 0.1,
+      "defused_by_preprocessing": false,
+      "clean_fnr": 0.0,
+      "fnr_raw": 0.98,
+      "fnr_preprocessed": 0.98,
+      "delta_fnr_raw": 0.98,
+      "delta_fnr_preprocessed": 0.98,
+      "preprocessing_benefit": 0.0,
+      "n_scored": 250,
+      "n_noop": 0,
+      "n_invalid": 0,
+      "conditions": {
+        "raw": {
+          "fnr": 0.98,
+          "clean_fnr": 0.0,
+          "delta_fnr": 0.98
+        },
+        "normalised": {
+          "fnr": 0.98,
+          "clean_fnr": 0.0,
+          "delta_fnr": 0.98
+        },
+        "folded": {
+          "fnr": 0.98,
+          "clean_fnr": 0.0,
+          "delta_fnr": 0.98
+        },
+        "casefolded": {
+          "fnr": 0.0,
+          "clean_fnr": 0.0,
+          "delta_fnr": 0.0
+        }
+      }
+    }
+  ]
+}

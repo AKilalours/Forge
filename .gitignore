@@ -44,3 +44,6 @@ reports/experiments/ray/ray_results/
 
 # Generated page build artifacts
 .build/
+
+# Build cache for the generated evidence page (scripts/build_evidence_page.py)
+.bc/

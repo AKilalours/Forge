@@ -131,9 +131,19 @@ def test_an_unbolded_suite_count_is_knowingly_not_gated() -> None:
 
 
 def test_the_committed_readme_agrees_with_itself() -> None:
-    """Every gated count in the README is the number the badge claims."""
+    """Every gated count in the README is the number the badge claims.
+
+    BOTH FILES, as `check_readme_claims.main` reads them. When the README was cut from
+    880 lines to 87 the prose moved to docs/evidence.md and the badge stayed behind, so
+    this test, reading only README.md, found no prose to check and failed. The gate
+    script was updated at the time and this test was not, which is how the two drifted:
+    the claim surface is now the pair, so anything checking it must read the pair.
+    """
     from pathlib import Path
-    md = (Path(__file__).resolve().parents[2] / "README.md").read_text()
+    root = Path(__file__).resolve().parents[2]
+    md = "\n".join(
+        (root / name).read_text() for name in ("README.md", "docs/evidence.md")
+    )
     badge = re.search(r"Tests-(\d+)%20passing", md)
     assert badge is not None
     claims = suite_size_claims(md)
