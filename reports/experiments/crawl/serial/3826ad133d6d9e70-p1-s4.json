@@ -1,0 +1,52 @@
+{
+  "runner": "serial",
+  "plan": {
+    "crawl": "CC-MAIN-2026-34",
+    "format": "wet",
+    "segments": 1,
+    "partitions": 1,
+    "shards": 4,
+    "fingerprint": "3826ad133d6d9e70"
+  },
+  "policy": {
+    "min_chars": 800,
+    "min_tokens": 150,
+    "max_tokens": 400,
+    "language": "en",
+    "language_score_min": 0.85
+  },
+  "segments_read": 1,
+  "documents_seen": 20614,
+  "documents_kept_before_dedup": 355,
+  "rejected": {
+    "empty_after_normalization": 2,
+    "high_symbol_ratio": 3,
+    "language": 4568,
+    "repetitive_lines": 36,
+    "too_long_tokens": 12271,
+    "too_short_chars": 2305,
+    "too_short_tokens": 1074
+  },
+  "keep_rate_before_dedup": 0.0172,
+  "distinct_worker_pids": 1,
+  "segment_seconds_max": 113.555,
+  "segment_seconds_sum": 113.555,
+  "duplicates_removed": 2,
+  "overlaps_training": 0,
+  "training_hashes_checked": 60000,
+  "documents_written": 353,
+  "by_split": {
+    "test": 46,
+    "train": 270,
+    "val": 37
+  },
+  "shards_written": 4,
+  "dedup_applied": true,
+  "corpus_fingerprint": "201ced55447b78ec",
+  "elapsed_seconds": 114.27,
+  "documents_seen_per_second": 180.4,
+  "out": "/tmp/crawl-probe",
+  "segment_paths": [
+    "crawl-data/CC-MAIN-2026-34/segments/1786091384908.68/wet/CC-MAIN-20260807101845-20260807131845-00000.warc.wet.gz"
+  ]
+}

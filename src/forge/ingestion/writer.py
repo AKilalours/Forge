@@ -47,8 +47,17 @@ def _row(doc: HumanDocument) -> dict:
     return d
 
 
-def write_parquet(docs: list[HumanDocument], root: str | Path) -> dict[str, int]:
-    """Partitioned by source and split. Returns rows written per partition."""
+def write_parquet(
+    docs: list[HumanDocument], root: str | Path, part: str = "part-000"
+) -> dict[str, int]:
+    """Partitioned by source and split. Returns rows written per partition.
+
+    `part` names the file inside each partition. The default keeps the single-writer
+    layout every existing reader expects. A distributed writer MUST pass a distinct name
+    per worker: with the default, two workers writing the same source and split both
+    write part-000.parquet, the second silently replaces the first, and the corpus loses
+    a shard without an error anywhere.
+    """
     root = Path(root)
     written: dict[str, int] = {}
     groups: dict[tuple[str, str], list[dict]] = {}
@@ -57,7 +66,7 @@ def write_parquet(docs: list[HumanDocument], root: str | Path) -> dict[str, int]
     for (source, split), rows in groups.items():
         out = root / f"source={source}" / f"split={split}"
         out.mkdir(parents=True, exist_ok=True)
-        pq.write_table(pa.Table.from_pylist(rows), out / "part-000.parquet", compression="zstd")
+        pq.write_table(pa.Table.from_pylist(rows), out / f"{part}.parquet", compression="zstd")
         written[f"{source}/{split}"] = len(rows)
     return written
 

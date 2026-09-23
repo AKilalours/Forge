@@ -41,6 +41,15 @@ def _build_source(entry: dict, local_root: Path | None):
         return src.GutenbergSource(entry.get("path") or (local_root or Path(".")) / "gutenberg")
     if sid == "gov":
         return src.GovInfoSource(entry.get("path") or (local_root or Path(".")) / "govinfo")
+    if sid == "cc":
+        from forge.ingestion.commoncrawl import CommonCrawlSource
+
+        return CommonCrawlSource(
+            entry["crawl"],
+            fmt=entry.get("format", "wet"),
+            segments=int(entry.get("segments", 1)),
+            segment_paths_override=entry.get("paths"),
+        )
     if sid == "local":
         return src.LocalJSONLSource(
             entry["path"],

@@ -74,6 +74,9 @@ class CleaningStats:
     seen: int = 0
     kept: int = 0
     rejected: Counter = field(default_factory=Counter)
+    # Carried into the report and the MANIFEST so a corpus cleaned WITHOUT the global
+    # dedup stages can never be mistaken for one cleaned with them. See Cleaner.
+    dedup_applied: bool = True
 
     @property
     def keep_rate(self) -> float:
@@ -85,15 +88,36 @@ class CleaningStats:
             "kept": self.kept,
             "keep_rate": round(self.keep_rate, 4),
             "rejected": dict(self.rejected),
+            "dedup_applied": self.dedup_applied,
         }
 
 
 class Cleaner:
-    """Stateful because dedup needs memory of everything seen so far in this run."""
+    """Stateful because dedup needs memory of everything seen so far in this run.
 
-    def __init__(self, policy: CleaningPolicy | None = None) -> None:
+    THAT STATEFULNESS IS WHY THIS CLASS CANNOT SIMPLY BE HANDED TO A DISTRIBUTED RUNNER.
+    Every other stage here is a pure function of one document. Exact and near-duplicate
+    dedup are not: they are functions of one document AND everything seen before it. Give
+    each Spark or Beam worker its own Cleaner and each one deduplicates only against its
+    own partition, so a page that appears in two segments survives twice. That is not a
+    thrown error, it is a corpus with duplicates straddling train and test, which is the
+    exact leak the fixed stage order in this module exists to prevent, and it would make
+    every reported number better than it should be.
+
+    So `dedup=False` exists: it runs the per-document stages and stops before the two
+    global ones, which is what a mining worker should do. Deduplication then happens once,
+    over everything, as a shuffle in the pipeline that owns the whole corpus. The ordering
+    still lives in exactly one place, which is the point; a second copy of this sequence
+    written for the distributed path is how the two would drift.
+
+    A corpus cleaned with `dedup=False` is NOT finished, and `stats.dedup_applied` records
+    that so a MANIFEST cannot claim otherwise.
+    """
+
+    def __init__(self, policy: CleaningPolicy | None = None, *, dedup: bool = True) -> None:
         self.policy = policy or CleaningPolicy()
-        self.stats = CleaningStats()
+        self.dedup = dedup
+        self.stats = CleaningStats(dedup_applied=dedup)
         self._exact = ExactDeduper()
         self._lsh = MinHashLSH(self.policy.lsh)
 
@@ -158,15 +182,17 @@ class Cleaner:
         doc_id = f"{rec.source_id}_{rec.source_record_id}"
         sha = content_sha256(text)
 
-        # 8. exact dedup
-        if self._exact.is_duplicate(doc_id, text) is not None:
-            self._reject("exact_duplicate")
-            return None
+        # 8 and 9. exact then near-duplicate dedup. The only two stages that depend on
+        # documents other than this one, and therefore the only two a per-partition worker
+        # must not run. See the class docstring.
+        if self.dedup:
+            if self._exact.is_duplicate(doc_id, text) is not None:
+                self._reject("exact_duplicate")
+                return None
 
-        # 9. near-duplicate dedup
-        if self._lsh.add_if_new(doc_id, text) is not None:
-            self._reject("near_duplicate")
-            return None
+            if self._lsh.add_if_new(doc_id, text) is not None:
+                self._reject("near_duplicate")
+                return None
 
         # 10, 11. domain/register carried from the source, then split assignment
         group = group_id_for(doc_id)
