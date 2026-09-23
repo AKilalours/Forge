@@ -35,6 +35,13 @@ data = [
   "selectolax>=0.3",
   "datasketch>=1.6",
   "presidio-analyzer>=2.2",
+  # Mining Common Crawl. warcio does the record framing over a multi-member gzip
+  # stream; hand-rolling that is how a parser ends up silently dropping the last
+  # record of every segment. requests is the streaming HTTP client, which is only
+  # a direct dependency now that a source reads from a URL rather than from a
+  # dataset library that owned its own transport.
+  "warcio>=1.7",
+  "requests>=2.31",
 ]
 # FORGE-IMAGE: see docs/image_spec_v1.md
 image = [
@@ -120,6 +127,16 @@ orchestration = [
   # why forge.hard_negative.beam_scan names its runner explicitly instead of trusting the
   # default. Verified against 2.76.
   "apache-beam>=2.60,<3",
+]
+# The ONNX Runtime serving path. Separate from `serve` because the FastAPI app does not
+# need it and the export script is not part of a deployment.
+onnx = [
+  "onnx>=1.16",
+  "onnxruntime>=1.18",
+  # torch>=2.6 routes torch.onnx.export through the dynamo exporter, which imports
+  # onnxscript at call time and is NOT a torch dependency. Without it the export dies
+  # with ModuleNotFoundError after loading a 700 MB checkpoint.
+  "onnxscript>=0.1",
 ]
 # The Streamlit deployment. Streamlit Community Cloud is the only free host that runs a
 # torch app without a payment card, so streamlit_app.py is the deployed interface and
