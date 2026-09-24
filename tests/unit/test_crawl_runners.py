@@ -20,10 +20,9 @@ from __future__ import annotations
 import shutil
 
 import pytest
+from test_crawl_core import CRAWL, policy, segments, training_root  # noqa: F401
 
 from forge.ingestion.crawl_core import plan_crawl, run_serial, training_hashes
-
-from test_crawl_core import CRAWL, policy, segments, training_root  # noqa: F401
 
 COMPARED = (
     "documents_seen", "documents_kept_before_dedup", "duplicates_removed",

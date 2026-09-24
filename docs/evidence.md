@@ -597,6 +597,35 @@ All 14 failures were HTTP 503 from data.commoncrawl.org, and all of them fall in
 That design is deliberate. An earlier version raised on the first failure and lost 37 minutes of completed work; the version before that lost 22. Losing 270 good segments to 14 bad ones is the worse outcome, so the run continues and the failures are listed per segment with their URLs, the CLI exits non-zero, and the report records `segments_read` as 270 rather than 284. A corpus assembled from fewer segments than were planned cannot be reproduced from the plan alone, and the artifact has to say so.
 
 ---
+## ⚙️ ONNX Runtime: a serving path that did not go faster
+
+vLLM does not fit this model. FORGE-Base is a bidirectional encoder over a fixed 512-token window with no KV cache, so continuous batching and paged attention have nothing to work with. ONNX Runtime does fit it, in principle: graph fusion and int8 kernels target exactly the per-window encoder compute this serving path pays for. So it was worth measuring. It did not pay off.
+
+| Intra-op threads | PyTorch windows/s | ONNX Runtime windows/s | Speedup |
+|---|---|---|---|
+| 1 | 2.66 | 2.70 | 1.02x |
+| 2 | 3.70 | 3.84 | 1.04x |
+| 4 | 4.28 | 4.48 | 1.05x |
+| 8 | 4.80 | 4.80 | 1.00x |
+| 10 | 4.84 | 4.56 | 0.94x |
+
+Batch 8, float32, same windows, same scope as [`cpu_latency_b8_t*.json`](../reports/experiments/inference): model forward only, no tokenisation or HTTP. Artifact: [`onnx_summary_mirror.json`](../reports/experiments/inference/onnx_summary_mirror.json).
+
+**Two to five percent at low thread counts, nothing at 8, and slower at 10.** At 512 tokens this encoder is bound by memory bandwidth rather than by operator dispatch, so the graph fusions ONNX Runtime brings have little left to remove, and at 10 threads its own scheduling costs more than it saves. Both runtimes plateau at the same place, which is the machine.
+
+**The numbers ARE the same model.** Maximum absolute difference across the parity sample is 2.28e-10 and 0 verdicts changed. The flip count alone would be weak evidence, because the sample happened to contain 0 windows near the 0.998252 threshold and a sample that could not flip proves nothing. The delta is what carries it: at 1e-10, a flip would need a window sitting within 1e-10 of the threshold.
+
+**int8 is where the speedup would have been, and it does not build.** Dynamic quantisation fails in onnxruntime's shape inference on the graph torch's dynamo exporter produces:
+
+```
+InferenceError: [ShapeInferenceError] Inferred shape and existing shape differ in dimension 0: (768) vs (2)
+```
+
+That is a toolchain incompatibility, not a property of the model, and it is the honest reason the CPU serving path stays float32. Quantisation was also the only variant that could have moved the verdicts, which is why the script measures flips rather than assuming them away.
+
+**What this row claims, therefore:** an ONNX export exists, it is numerically the deployed model, and it is measured against the PyTorch path on the same windows. It is not a speedup. Reporting it as one would have required either not measuring the baseline or not publishing the comparison.
+
+---
 ## 🛡️ Adversarial: what breaks the detector, and what fixes it for free
 
 Four preprocessing conditions, each scored against **its own** clean baseline, because folding and casefolding move clean documents too and a defence that lowers the attacked miss rate by moving everything is not a defence. 250 AI documents per arm, 1,000 human documents for the cost side. Artifacts: [`adversarial_forge_min_baseline.json`](../reports/experiments/adversarial_forge_min_baseline.json), [`adversarial_forge_min_mirror.json`](../reports/experiments/adversarial_forge_min_mirror.json).

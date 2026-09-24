@@ -1,0 +1,65 @@
+{
+  "arm": "mirror",
+  "experiment": "forge_min_mirror",
+  "opset": 17,
+  "device_name": "arm64 (Darwin)",
+  "backbone": "microsoft/deberta-v3-base",
+  "seq_len": 512,
+  "scope": "Model forward over pre-tokenised windows only. Tokenisation, windowing and HTTP overhead are NOT included, so a real request costs this plus those. Same scope as cpu_latency_b8_t*.json, so the two compare.",
+  "variants": {
+    "float32": {
+      "file": "outputs/forge_min_mirror/model.onnx",
+      "bytes": 735504803,
+      "parity": {
+        "windows": 8,
+        "max_abs_delta": 2.2814868832316763e-10,
+        "mean_abs_delta": 7.558340814986948e-11,
+        "threshold": 0.998252,
+        "verdict_flips": 0,
+        "near_threshold_windows": 0
+      },
+      "threads": {
+        "1": {
+          "batch_windows": 8,
+          "median_ms": 2966.83,
+          "p95_ms": 3317.5,
+          "windows_per_second": 2.7,
+          "ms_per_window": 370.85,
+          "samples": 7
+        },
+        "2": {
+          "batch_windows": 8,
+          "median_ms": 2082.63,
+          "p95_ms": 2317.56,
+          "windows_per_second": 3.84,
+          "ms_per_window": 260.33,
+          "samples": 7
+        },
+        "4": {
+          "batch_windows": 8,
+          "median_ms": 1785.49,
+          "p95_ms": 2170.38,
+          "windows_per_second": 4.48,
+          "ms_per_window": 223.19,
+          "samples": 7
+        },
+        "8": {
+          "batch_windows": 8,
+          "median_ms": 1665.29,
+          "p95_ms": 2250.71,
+          "windows_per_second": 4.8,
+          "ms_per_window": 208.16,
+          "samples": 7
+        },
+        "10": {
+          "batch_windows": 8,
+          "median_ms": 1755.21,
+          "p95_ms": 1812.65,
+          "windows_per_second": 4.56,
+          "ms_per_window": 219.4,
+          "samples": 7
+        }
+      }
+    }
+  }
+}

@@ -26,12 +26,12 @@ from forge.cleaning.pipeline import Cleaner, CleaningPolicy
 from forge.ingestion.commoncrawl import CrawlStreamError, stream_segment
 from forge.ingestion.crawl_core import (
     CrawlError,
-    is_stats,
     Resolution,
     build_report,
     clean_segment,
     corpus_fingerprint,
     fingerprint_segments,
+    is_stats,
     load_policy,
     merge_stats,
     partition_segments,

@@ -200,14 +200,14 @@ def compare(reference: list[float], candidate: list[float], threshold: float) ->
             f"the two runtimes returned different window counts, {len(reference)} and "
             f"{len(candidate)}. Comparing them elementwise would invent an agreement."
         )
-    deltas = [abs(a - b) for a, b in zip(reference, candidate)]
+    deltas = [abs(a - b) for a, b in zip(reference, candidate, strict=True)]
     return {
         "windows": len(deltas),
         "max_abs_delta": max(deltas) if deltas else 0.0,
         "mean_abs_delta": statistics.fmean(deltas) if deltas else 0.0,
         "threshold": threshold,
         "verdict_flips": sum(
-            (a >= threshold) != (b >= threshold) for a, b in zip(reference, candidate)
+            (a >= threshold) != (b >= threshold) for a, b in zip(reference, candidate, strict=True)
         ),
         "near_threshold_windows": sum(abs(p - threshold) < 1e-3 for p in reference),
     }
@@ -310,7 +310,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {threads} threads: {result['windows_per_second']} windows/s", flush=True)
         report["variants"][name] = {
             "file": str(path.relative_to(REPO)),
-            "bytes": path.stat().st_size,
+            # Graph AND weights. The dynamo exporter writes tensors to a sibling .data
+            # file, so recording only the graph reported this 735 MB model as 145 KB.
+            "bytes": path.stat().st_size + sum(
+                q.stat().st_size for q in [path.with_suffix(".onnx.data")] if q.exists()
+            ),
             "parity": checks,
             "threads": sweep,
         }

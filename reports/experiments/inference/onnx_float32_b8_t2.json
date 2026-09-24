@@ -1,0 +1,21 @@
+{
+  "arm": "mirror",
+  "experiment": "forge_min_mirror",
+  "opset": 17,
+  "device_name": "arm64 (Darwin)",
+  "backbone": "microsoft/deberta-v3-base",
+  "seq_len": 512,
+  "scope": "Model forward over pre-tokenised windows only. Tokenisation, windowing and HTTP overhead are NOT included, so a real request costs this plus those. Same scope as cpu_latency_b8_t*.json, so the two compare.",
+  "precision": "float32",
+  "torch_threads": 2,
+  "batch_sweep": [
+    {
+      "batch_windows": 8,
+      "median_ms": 2082.63,
+      "p95_ms": 2317.56,
+      "windows_per_second": 3.84,
+      "ms_per_window": 260.33,
+      "samples": 7
+    }
+  ]
+}
