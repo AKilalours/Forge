@@ -206,5 +206,5 @@ st.divider()
 # to know it. The byline is what belongs here; the memory constraint is an implementation
 # note and lives in the module docstring.
 st.caption(
-    "Built by Akila Lourdes Miriyala Francis · github.com/AKilalours/Panagram_Forge"
+    "Built by Akila Lourdes Miriyala Francis · github.com/AKilalours/forge-ai-detection"
 )

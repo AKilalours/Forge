@@ -514,7 +514,7 @@ def build_rest(o: list, data: dict) -> list:
     o.append('<footer><p>Built by <code>scripts/build_evidence_page.py</code> from the '
              'artifacts in <code>reports/experiments/</code>. The claim checker fails the '
              'build when a published figure and its artifact disagree. '
-             '<a href="https://github.com/AKilalours/Panagram_Forge">Source</a></p>'
+             '<a href="https://github.com/AKilalours/forge-ai-detection">Source</a></p>'
              '</footer>')
     o.append("</div>")
     o.append(f"<script>{SCRIPT}</script>")

@@ -1,7 +1,7 @@
 # FORGE: what failure-driven synthetic data actually bought
 
 **Failure-Driven Synthetic Data Generation for Robust AI-Content Detection**
-Tier 1 results, September 2026. Code and every run record: `github.com/AKilalours/Panagram_Forge`.
+Tier 1 results, September 2026. Code and every run record: `github.com/AKilalours/forge-ai-detection`.
 
 ## The question
 

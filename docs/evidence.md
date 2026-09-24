@@ -1,6 +1,6 @@
 # FORGE: the long-form record
 
-Every table here is checked against its artifact by `scripts/check_readme_claims.py`, which fails the build when a published figure and its committed JSON disagree. The short version, with the charts, is [docs/index.html](https://akilalours.github.io/Panagram_Forge/) and the [README](../README.md).
+Every table here is checked against its artifact by `scripts/check_readme_claims.py`, which fails the build when a published figure and its committed JSON disagree. The short version, with the charts, is [docs/index.html](https://akilalours.github.io/forge-ai-detection/) and the [README](../README.md).
 
 ---
 
@@ -957,8 +957,8 @@ are written as narratives rather than assertions.
 
 ### Locally
 ```bash
-git clone git@github.com:AKilalours/Panagram_Forge.git
-cd Panagram_Forge
+git clone git@github.com:AKilalours/forge-ai-detection.git
+cd forge-ai-detection
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[serve,image,dev]"
 ```
@@ -1008,7 +1008,7 @@ Nothing here is typed in by hand.
 ## 📁 Structure
 
 ```
-Panagram_Forge/
+forge-ai-detection/
 ├── src/forge/
 │   ├── generation/         # mirror engine: the experiment's one variable
 │   ├── training/           # training loop, checkpoint selection, calibration
