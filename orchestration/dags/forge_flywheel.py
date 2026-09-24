@@ -86,8 +86,12 @@ with DAG(
             "forge mine --config configs/training/mirror.yaml "
             f"--arm {ARM} --reserve data/reserve "
             f"--out {RUN_DIR} "
-            "--round {{ run_id | replace(':', '-') }} "
-            "--min-confidence 0.90"
+            "--round {{ run_id | replace(':', '-') }}"
+            # No --min-confidence. It used to say 0.90, which predates the calibrated
+            # thresholds and would have failed every scheduled run on arrival: the arms
+            # deploy above 0.996 and the gate may not be looser than the deployment.
+            # Omitted, the CLI uses the arm's own threshold, so the DAG cannot drift out
+            # of date with a retrained arm the way a literal does.
         ),
         doc_md=(
             "Scores the reserve pool with the deployed arm and keeps documents it calls AI "

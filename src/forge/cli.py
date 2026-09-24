@@ -388,7 +388,12 @@ def mine(
     arm: str = typer.Option("mirror", "--arm", help="which trained arm mines: baseline|mirror"),
     round_name: str = typer.Option("mining_run_001", "--round"),
     limit: int = typer.Option(0, "--limit", help="cap reserve documents scanned, 0 for all"),
-    min_confidence: float = typer.Option(0.90, "--min-confidence"),
+    min_confidence: float = typer.Option(
+        None, "--min-confidence",
+        help="mining gate. Defaults to the arm's own deployed threshold, which is the "
+             "loosest value that is still valid: a gate below it selects documents "
+             "production never called AI.",
+    ),
 ) -> None:
     """Phase 4: hard negative mining pass over the human reserve pool.
 
@@ -415,10 +420,27 @@ def mine(
             f"mining needs a trained detector to score the reserve pool: {error}"
         ) from None
 
+    # THE GATE DEFAULTS TO THE ARM'S THRESHOLD, and is checked BEFORE the reserve pool is
+    # read. This used to default to 0.90, a number that predates the calibrated
+    # thresholds: every arm now deploys above 0.996, so the default was guaranteed to
+    # raise. It raised inside scan(), after loading a 735 MB checkpoint and every document
+    # in the pool, which is a minute of work to be told the arguments were wrong. The
+    # docstring on that check is right and stays; what was wrong was arriving there.
+    if min_confidence is None:
+        min_confidence = scorer.threshold
+    if min_confidence < scorer.threshold:
+        raise typer.BadParameter(
+            f"--min-confidence {min_confidence} is below {arm}'s deployed threshold "
+            f"{scorer.threshold:.6f}. The mining gate must be at least as strict as the "
+            f"production decision, or it selects documents production never called AI. "
+            f"Omit the flag to use the threshold itself.",
+            param_hint="--min-confidence",
+        )
+
     docs = load_reserve(reserve, limit or None)
     typer.echo(
         f"scanning {len(docs)} reserve documents with {scorer.model_version} "
-        f"at operating threshold {scorer.threshold:.6f}, mining gate {min_confidence}"
+        f"at operating threshold {scorer.threshold:.6f}, mining gate {min_confidence:.6f}"
     )
     round_ = run_round(
         docs, scorer,

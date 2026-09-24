@@ -113,3 +113,32 @@ def test_the_mining_gate_must_not_be_looser_than_the_operating_threshold(wired):
         ["mine", "--config", CONFIG, "--out", str(wired / "r"), "--min-confidence", "0.1"],
     )
     assert result.exit_code != 0, "a gate below the operating threshold must be refused"
+
+
+def test_the_mining_gate_has_no_stale_default() -> None:
+    """Regression: --min-confidence defaulted to 0.90 and every arm deploys above 0.996.
+
+    The gate may not be looser than the deployed threshold, or it selects documents
+    production never called AI, so that default could not succeed for any trained arm.
+    It failed inside scan(), after loading a 735 MB checkpoint and the whole reserve
+    pool: roughly a minute of work to be told the arguments were wrong.
+
+    Defaulting to the arm's own threshold also means a retrained arm cannot leave the
+    default behind, which a literal would.
+    """
+    import inspect
+
+    from forge.cli import mine
+
+    default = inspect.signature(mine).parameters["min_confidence"].default
+    assert getattr(default, "default", default) is None
+
+
+def test_the_flywheel_dag_does_not_pin_a_gate_either() -> None:
+    # The DAG carried the same 0.90, so every scheduled round would have failed on
+    # arrival. It now omits the flag and inherits the arm's threshold.
+    from pathlib import Path
+
+    dag = (Path(__file__).resolve().parents[2]
+           / "orchestration" / "dags" / "forge_flywheel.py").read_text()
+    assert "--min-confidence 0.90" not in dag
