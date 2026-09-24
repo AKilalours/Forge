@@ -97,18 +97,23 @@ a bug with a reproduction rather than a picture nobody can check.</sub>
 quoted elsewhere in this README, so treat the numbers on screen as illustrative of the
 layout and the tables in <a href="docs/evaluation.md">docs/evaluation.md</a> as current.</sub>
 
-### The infrastructure numbers, and the one that did not survive scale
+### Two runners, one machine, and a speedup column that means nothing
 
 <p align="center">
   <img src="images/chart_scaling.svg" width="100%"
-       alt="Spark speedup by partition count at 40 documents and at 2,000: 1.46x collapses
-            to 1.09x once the scan is large enough that startup stops dominating"/>
+       alt="Spark and Beam throughput at 1, 2 and 4 partitions over the same 2,000 documents:
+            Beam starts at 0.80 docs per second against Spark's 2.09 and both finish near
+            2.5, so Beam's 3.29x speedup and Spark's 1.09x describe the same machine"/>
 </p>
 
-<sub>The 40-document sweep is in <code>reports/experiments/spark/</code> and the
-2,000-document one over the Common Crawl reserve pool is in
-<code>reports/experiments/spark_reserve/</code>. Both are kept, because the disagreement
-between them is the finding.</sub>
+<sub>Same pool, same 2,000 Common Crawl documents, same scan code, same host. Spark reports
+a <b>1.09x</b> speedup at four partitions and Beam reports <b>3.29x</b>, and they land
+within 16% of each other in absolute throughput. Beam's ratio is large because its
+single-partition baseline is two and a half times slower, not because it parallelises
+better. Artifacts in <code>reports/experiments/spark_reserve/</code> and
+<code>reports/experiments/beam_reserve/</code>; the 40-document pilots both runners started
+from are in <code>spark/</code> and <code>beam/</code>, kept because the disagreement between
+the two sizes is the finding.</sub>
 
 ### Look at it
 

@@ -164,24 +164,29 @@ def chart_adversarial():
 
 
 def chart_scaling():
-    """The same sweep at two sizes, which is where the speedup column stopped surviving."""
-    pilot = json.loads((ART / "spark" / "spark_summary.json").read_text())
-    scale = json.loads((ART / "spark_reserve" / "spark_summary.json").read_text())
-    by_p = {r["partitions"]: r["speedup"] for r in pilot["rows"]}
-    by_s = {r["partitions"]: r["speedup"] for r in scale["rows"]}
+    """Both runners at 2,000 documents, which is where the speedup column stops meaning
+    anything. Speedup and absolute throughput are drawn together on purpose: Beam's ratio is
+    three times Spark's and its throughput is within 16%, and only one of those two facts
+    survives being plotted alone."""
+    spark = json.loads((ART / "spark_reserve" / "spark_summary.json").read_text())
+    beam = json.loads((ART / "beam_reserve" / "multi_processing"
+                       / "beam_summary.json").read_text())
+    s = {r["partitions"]: r for r in spark["rows"]}
+    b = {r["partitions"]: r for r in beam["rows"]}
 
-    groups = [(f"{p} partition{'s' if p > 1 else ''}", [by_p[p], by_s[p]])
+    groups = [(f"{p} partition{'s' if p > 1 else ''}",
+               [s[p]["documents_per_second_compute"], b[p]["documents_per_second_compute"]])
               for p in (1, 2, 4)]
     return grouped_bars(
         groups,
-        series_names=["40 documents (pilot)", "2,000 documents (reserve pool)"],
-        y_max=1.6,
-        y_ticks=[0, 0.5, 1.0, 1.5],
+        series_names=["Spark local", "Beam FnApiRunner (processes)"],
+        y_max=3.0,
+        y_ticks=[0, 1.0, 2.0, 3.0],
         fmt=lambda v: f"{v:.2f}",
-        title="Spark local: the same sweep, scanning 50x more",
-        colors=[MUTED, S1],
-        note="Ideal here is 1.00, not the partition count: the thread budget is fixed. "
-             "The pilot was measuring startup.",
+        title="Same pool, same 2,000 documents: documents per second, not speedup",
+        colors=[S1, S2],
+        note="Spark reports a 1.09x speedup here and Beam reports 3.29x. "
+             "This is why the ratio is never published alone.",
     )
 
 

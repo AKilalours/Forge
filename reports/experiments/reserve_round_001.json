@@ -1,0 +1,116 @@
+{
+  "round": "reserve_round_001",
+  "created_at": "2026-09-24T08:07:25.118984+00:00",
+  "mining": {
+    "scanned": 10000,
+    "errors_at_operating_threshold": 2,
+    "above_confidence_gate": 2,
+    "skipped_already_mined": 0,
+    "selected": 2,
+    "error_rate": 0.0002
+  },
+  "atlas": {
+    "created_at": "2026-09-24T08:07:25.120331+00:00",
+    "n_failures": 2,
+    "embedder": "hashing_v1",
+    "clustering": {
+      "method": "kmeans",
+      "n_clusters": 2,
+      "n_noise": 0,
+      "sizes": {
+        "0": 1,
+        "1": 1
+      },
+      "params": {
+        "k": 2,
+        "seed": 42,
+        "iters": 100
+      }
+    },
+    "silhouette": null,
+    "quality_warnings": [
+      "embedder is hashing_v1, which captures surface form but not semantics. Fine for tests, not for a real mining run.",
+      "clusters share a metadata label ['informational / web / via cc']: one true mode was likely split across several clusters, which over-weights it in proportional selection."
+    ],
+    "clusters": [
+      {
+        "cluster_id": 0,
+        "label": "informational / web / via cc",
+        "size": 1,
+        "share": 0.5,
+        "mean_confidence": 0.9997,
+        "top_domains": [
+          [
+            "web",
+            1
+          ]
+        ],
+        "top_sources": [
+          [
+            "cc",
+            1
+          ]
+        ],
+        "top_registers": [
+          [
+            "informational",
+            1
+          ]
+        ],
+        "failure_types": {
+          "human_false_positive": 1
+        },
+        "exemplar_ids": [
+          "cc_urn:uuid:077c0dd8-41a6-4254-8634-6b495cd38134"
+        ]
+      },
+      {
+        "cluster_id": 1,
+        "label": "informational / web / via cc",
+        "size": 1,
+        "share": 0.5,
+        "mean_confidence": 1.0,
+        "top_domains": [
+          [
+            "web",
+            1
+          ]
+        ],
+        "top_sources": [
+          [
+            "cc",
+            1
+          ]
+        ],
+        "top_registers": [
+          [
+            "informational",
+            1
+          ]
+        ],
+        "failure_types": {
+          "human_false_positive": 1
+        },
+        "exemplar_ids": [
+          "cc_urn:uuid:0a1cb44e-ca7c-494f-9851-e7c451db7b0c"
+        ]
+      }
+    ]
+  },
+  "selection": {
+    "n_train": 1,
+    "n_holdout": 1,
+    "train_clusters": [
+      0
+    ],
+    "holdout_clusters": [
+      1
+    ],
+    "per_cluster_quota": {
+      "0": 1
+    },
+    "dropped_noise": 0
+  },
+  "n_train_refs": 1,
+  "n_holdout_refs": 1
+}

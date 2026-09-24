@@ -560,11 +560,44 @@ and are not being compared. What is being compared is the *shape* of the scaling
 one pool at two sizes, and the honest reading is that the earlier speedup column was
 measuring startup amortisation and calling it parallelism.
 
-Beam has not been re-run at this size, so there is no Beam row here, and the Beam tables
-above stay attached to the 40-document pool they were measured on.
+**Beam, re-run over the same pool at the same 2,000 documents**, under `multi_processing`,
+which is the mode Spark local is comparable to:
 
-Records: [`reports/experiments/spark_reserve/`](reports/experiments/spark_reserve) for the
-2,000-document run, [`reports/experiments/spark/`](reports/experiments/spark) for the pilot.
+| Partitions | Model loads | Docs/s (compute) | Speedup | Skew | Startup (s) |
+|---|---|---|---|---|---|
+| 1 | 1 | 0.802 | 1.00 | 1.00 | 17.6 |
+| 2 | 2 | 2.248 | 2.80 | 1.01 | 14.1 |
+| 4 | 4 | 2.640 | 3.29 | 1.03 | 17.1 |
+
+**Read the two tables side by side and the speedup column falls apart completely.** Beam
+reports 3.29x where Spark reports 1.09x, on the same pool, the same documents, the same
+host, the same scan code. Beam is not three times better at parallelising. Its
+single-partition run does **0.802 docs/s against Spark's 2.094**, two and a half times
+slower on identical work, and almost all of its apparent speedup is Beam climbing out of
+its own hole. At four partitions the two runners land within 16% of each other, 2.640
+against 2.279, which is the number that actually describes the machine.
+
+This is the fourth time in this repository that a speedup column has turned out to be a
+statement about its denominator, and it is the clearest case of the four, because here both
+denominators are published and the reader can see the trick without being told. It is also
+the reason the absolute throughput column is never dropped: a ratio alone would have made
+Beam look like the better runner.
+
+Where Beam's baseline goes is not a mystery. Its per-element path encodes every record
+through the Fn API and writes results to a file sink, and at one partition that cost is
+paid serially with nothing to overlap it. Spark's `mapPartitions` plus `collect` does not
+pay it at all. Splitting the work is what lets Beam hide that overhead behind concurrent
+workers, which is a real property of the runner and not a defect, but it is a property of
+the *overhead*, not of the scan.
+
+**What is still missing.** Beam's `multi_threading` mode has not been re-run at 2,000
+documents, so the thread-against-process comparison remains a 40-document result and is
+reported above as one. Nothing here has run on a cluster, on Dataflow or on Flink.
+
+Records: [`reports/experiments/spark_reserve/`](reports/experiments/spark_reserve) and
+[`reports/experiments/beam_reserve/`](reports/experiments/beam_reserve) for the
+2,000-document runs, [`reports/experiments/spark/`](reports/experiments/spark) and
+[`reports/experiments/beam/`](reports/experiments/beam) for the pilots.
 
 **What the port was actually worth, which was not the numbers.** Expressing the same job on
 a second substrate is what tested whether the job was separable from its runner. It was not:
@@ -632,6 +665,53 @@ The reserve pool this project's flywheel needs did not exist until this run. It 
 All 14 failures were HTTP 503 from data.commoncrawl.org, and all of them fall in a contiguous block of segment numbers, which is a server-side window rather than 14 independent faults. Each one was retried four times with backoff to a minute before being recorded.
 
 That design is deliberate. An earlier version raised on the first failure and lost 37 minutes of completed work; the version before that lost 22. Losing 270 good segments to 14 bad ones is the worse outcome, so the run continues and the failures are listed per segment with their URLs, the CLI exits non-zero, and the report records `segments_read` as 270 rather than 284. A corpus assembled from fewer segments than were planned cannot be reproduced from the plan alone, and the artifact has to say so.
+
+### And then the flywheel was pointed at it, which is what the pool was for
+
+Building the pool was half the exercise. The other half is the mining stage actually running
+against it: score real web text with the deployed model at the deployed threshold, and keep
+whatever it gets wrong. That round has now run. Artifact:
+[`reserve_round_001.json`](../reports/experiments/reserve_round_001.json).
+
+| | |
+|---|---|
+| Model | `forge_min_mirror@8e06099f` |
+| Documents scanned | 10,000 |
+| Operating threshold | 0.998252 |
+| Human documents scored above it | **2** |
+| Measured false-positive rate | **0.020%** |
+| FPR budget the threshold was fitted to | 0.1% |
+| Selected into the round | 2 (1 train, 1 holdout) |
+
+**The interesting number is the one that is small.** The threshold was fitted on a validation
+split to hold false positives under 0.1%. On 10,000 documents of real Common Crawl text,
+which is not that validation split and shares no generator, register or crawl with it, the
+rate came out at 0.020%, five times inside budget. That is the first evidence in this project
+that the operating point survives contact with the open web, and it is worth stating clearly
+because almost every other generalisation result here goes the other way: the detector misses
+most AI text it has not seen, and it does that while almost never accusing a human. Those are
+different failures and only one of them is the one a user gets hurt by.
+
+**The mining half of the round is not a result, and the artifact says so itself.** Two
+failures is not a corpus. The round still ran its clustering stage over them and produced two
+clusters of one document each, so it recorded its own warnings rather than a silhouette
+score:
+
+> `embedder is hashing_v1, which captures surface form but not semantics. Fine for tests, not for a real mining run.`
+>
+> `clusters share a metadata label ['informational / web / via cc']: one true mode was likely split across several clusters, which over-weights it in proportional selection.`
+
+Both are correct and both were written by the pipeline, not by me afterwards. At n=2 the
+atlas, the proportional per-cluster quota and the train/holdout split are arithmetic over
+noise. What the round demonstrates is that the stage runs end to end on a real corpus, keeps
+train and holdout separate, and refuses to flatter itself. What it does not demonstrate is
+that mining improves the model, because two documents cannot.
+
+**The honest next step, which has not run.** At 0.020%, finding enough false positives to
+retrain on means scanning on the order of a million documents rather than ten thousand, which
+the pool has enough shards for at roughly 2.5 documents per second per partition, so about a
+day of laptop time. That is the experiment. The flywheel exists and turns; it has not yet
+turned far enough to move anything.
 
 ---
 ## ⚙️ ONNX Runtime: a serving path that did not go faster
