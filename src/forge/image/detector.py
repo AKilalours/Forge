@@ -133,30 +133,55 @@ def resolve_ai_index(id2label: dict) -> int:
 
 
 POLARITY_RECORD = "reports/experiments/image_detector_polarity.json"
+POLARITY_GLOB = "reports/experiments/image_detector_polarity*.json"
 
 
-def measured_model_id() -> str | None:
-    """Which detector has actually been measured, if any.
+def record_path(model_id: str) -> str:
+    """Where this model's probe result is written. One file per model, not one per repo."""
+    slug = model_id.replace("/", "__").replace(":", "_")
+    return f"reports/experiments/image_detector_polarity__{slug}.json"
 
-    The polarity record names a model. Nothing used to make the app LOAD that model, so a
-    probe could measure umm-maybe while the server quietly served Organika, the first
-    candidate in the list. The record then did not match the loaded model, was correctly
-    ignored, and the page said "polarity not verified" forever while a measurement sat on
-    disk. Two sources of truth with no link between them.
 
-    A measured detector outranks the candidate order. That is the whole point of measuring.
-    """
+def polarity_records() -> list[dict]:
+    """Every probe result on disk, newest format and legacy path alike."""
     import json
     import pathlib
 
-    path = pathlib.Path(POLARITY_RECORD)
-    if not path.exists():
-        return None
-    try:
-        model_id = json.loads(path.read_text()).get("model_id")
-    except Exception:  # noqa: BLE001 - an unreadable record names nothing
-        return None
-    return model_id if isinstance(model_id, str) and model_id else None
+    out = []
+    for path in sorted(pathlib.Path().glob(POLARITY_GLOB)):
+        try:
+            record = json.loads(path.read_text())
+        except Exception:  # noqa: BLE001 - an unreadable record is no record
+            continue
+        if isinstance(record.get("model_id"), str) and record["model_id"]:
+            out.append(record)
+    return out
+
+
+def measured_model_id() -> str | None:
+    """The BEST measured detector, if any has been measured.
+
+    This used to be "the measured detector", singular, because there was one record file
+    for the whole repo and whichever model was probed last owned it. The consequence was
+    not subtle: umm-maybe had been probed, so it was pinned and served, while
+    Organika/sdxl-detector sat first in CANDIDATES and was never loaded. A ChatGPT image
+    scored 2.1% and the page reported no AI, on a model whose own probe measured 0.55
+    recall. The rule "measured outranks unmeasured" was right; "the only measured one wins
+    however bad it is" was not.
+
+    Ranked by measured recall at the operating point, then by sample size, so a model
+    measured on 200 images outranks one measured on 29 at the same recall. Measuring a
+    better detector is now what makes the app serve it.
+    """
+    ranked = sorted(
+        (r for r in polarity_records() if isinstance(r.get("verified_ai_index"), int)),
+        key=lambda r: (
+            float(r.get("ai_recall_at_threshold") or 0.0),
+            sum(v for v in (r.get("n") or {}).values() if isinstance(v, int)),
+        ),
+        reverse=True,
+    )
+    return ranked[0]["model_id"] if ranked else None
 
 
 def verified_polarity(model_id: str) -> dict | None:
@@ -168,21 +193,13 @@ def verified_polarity(model_id: str) -> dict | None:
     labelled images, when one exists for THIS model, outranks the names. Written by
     scripts/image_detector_probe.py. Never edited by hand to make an output look better.
     """
-    import json
-    import pathlib
-
-    path = pathlib.Path(POLARITY_RECORD)
-    if not path.exists():
-        return None
-    try:
-        record = json.loads(path.read_text())
-    except Exception:  # noqa: BLE001 - an unreadable record is no record
-        return None
-    if record.get("model_id") != model_id:
-        return None                      # measured for a different model; does not transfer
-    if not isinstance(record.get("verified_ai_index"), int):
-        return None
-    return record
+    for record in polarity_records():
+        if record.get("model_id") != model_id:
+            continue                     # measured for a different model; does not transfer
+        if not isinstance(record.get("verified_ai_index"), int):
+            return None
+        return record
+    return None
 
 
 @dataclass

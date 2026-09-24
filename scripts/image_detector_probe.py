@@ -38,7 +38,12 @@ MIN_PER_GROUP = 5
 # whether the whole distribution moved.
 MIN_SEPARATION = 0.20
 MIN_MEDIAN_SEPARATION = 0.15
-OUT = pathlib.Path("reports/experiments/image_detector_polarity.json")
+# ONE RECORD PER MODEL. A single shared file meant whichever model was probed last owned
+# it, and the loader served that one however weak it was: umm-maybe was pinned at 0.55
+# recall while a stronger candidate was never tried. The path is derived from the model id
+# by forge.image.detector.record_path, so probing three models leaves three records and the
+# best one wins.
+OUT = pathlib.Path("reports/experiments/image_detector_polarity.json")  # legacy, still read
 
 
 def _images(root: str) -> list[pathlib.Path]:
@@ -219,8 +224,11 @@ def main() -> int:
           f"images it is evaluated on, so this recall is optimistic and this false-positive "
           f"rate is zero by construction. It is an operating point, not a result.")
 
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps({
+    from forge.image.detector import record_path
+
+    out = pathlib.Path(record_path(detector.model_id))
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps({
         "model_id": detector.model_id,
         "labels": list(detector.labels),
         "name_based_ai_index": detector.ai_index,
@@ -262,7 +270,7 @@ def main() -> int:
             "the recall is optimistic. Measured, never adjusted to make a result look better."
         ),
     }, indent=2) + "\n")
-    print(f"written {OUT}")
+    print(f"written {out}")
     return 0
 
 

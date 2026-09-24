@@ -176,7 +176,11 @@ def image_tab() -> None:
         height += 620
     if payload.get("maps"):
         height += 620
-    show(image_result(payload, compact=True), height=560)
+    # TALL ENOUGH FOR THE PANELS IT RENDERS. At 560 the occlusion map and the pixel
+    # statistics were below the cut and looked as though they had not been computed,
+    # which is exactly the complaint that sent me looking. components.html crops to this
+    # height; it does not grow to fit.
+    show(image_result(payload, compact=True), height=1700)
 
 
 # ---------------------------------------------------------------------------------- page
