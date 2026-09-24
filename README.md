@@ -22,7 +22,6 @@
 <p align="center">
   <a href="docs/evaluation.md"><b>Evaluation</b></a> ·
   <a href="docs/writeup.md"><b>Writeup</b></a> ·
-  <a href="docs/jd_coverage.md"><b>What is and is not implemented</b></a>
 </p>
 
 <p align="center">
