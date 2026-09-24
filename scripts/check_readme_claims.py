@@ -237,29 +237,42 @@ def close(published: str, stored: float, *, percent: bool = False) -> bool:
     return round(value, decimals) == round(want, decimals)
 
 
-def missing_images() -> list[str]:
-    """Every local image the README and the evidence page point at must exist.
+def missing_links() -> list[str]:
+    """Every local file the README and the evidence page point at must exist.
 
-    WRITTEN AFTER SHIPPING FOUR BROKEN ONES. Cutting the README to one screen moved its
-    long-form half into docs/, and every `images/...` path in the moved text silently
-    stopped resolving, because the same relative path now started one directory deeper.
-    Nothing failed: GitHub renders a broken image as a small grey icon, and the only
-    reader who notices is the one you were trying to impress. A claim gate that checks
-    every number and not whether the screenshots load is checking the easy half.
+    WRITTEN IN TWO PASSES, AFTER SHIPPING BOTH KINDS OF BREAKAGE.
+
+    Images first. Cutting the README to one screen moved its long-form half into docs/,
+    and every `images/...` path in the moved text silently stopped resolving, because the
+    same relative path now started one directory deeper. Nothing failed: GitHub renders a
+    broken image as a small grey icon, and the only reader who notices is the one you were
+    trying to impress.
+
+    Then documents, after `docs/jd_coverage.md` was deleted and left five live links
+    pointing at it across the README, two docs and three modules. A dead link in a
+    repository someone is reviewing reads as carelessness about exactly the thing this
+    project claims to be careful about, and it is invisible to a checker that only counts
+    numbers. Anchors are stripped before the check because the file is what has to exist;
+    verifying the heading too would fail on every legitimate rename of a section.
     """
     import re
+
+    extensions = "png|jpe?g|gif|svg|webp|md|html|json|py|yaml|yml|cu|txt"
+    pattern = re.compile(
+        r'(?:src=|href=|]\()\s*"?((?!https?:|mailto:|data:|#)[^"\')\s>]+'
+        rf'\.(?:{extensions})(?:#[^"\')\s>]*)?)')
 
     problems = []
     for name in ("README.md", "docs/evidence.md"):
         page = ROOT / name
         if not page.exists():
             continue
-        for match in re.finditer(r'(?:src=|]\()\s*"?((?!https?:|data:)[^"\')\s]+\.(?:png|jpe?g|gif|svg|webp))',
-                                 page.read_text()):
-            target = (page.parent / match.group(1)).resolve()
+        for match in pattern.finditer(page.read_text()):
+            raw = match.group(1)
+            target = (page.parent / raw.split("#", 1)[0]).resolve()
             if not target.exists():
-                problems.append(f"{name} points at {match.group(1)}, which does not exist")
-    return problems
+                problems.append(f"{name} points at {raw}, which does not exist")
+    return sorted(set(problems))
 
 
 def main(check_test_count: bool = True) -> int:
@@ -277,7 +290,7 @@ def main(check_test_count: bool = True) -> int:
         if (ROOT / name).exists()
     )
     bad: list[str] = []
-    bad += missing_images()
+    bad += missing_links()
 
     # ---- out-of-distribution table -----------------------------------------
     ood = table_rows(md, "| Benchmark | AUROC · A |")

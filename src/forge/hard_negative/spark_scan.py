@@ -2,7 +2,8 @@
 
 WHY SPARK HERE AND NOWHERE ELSE IN THIS REPO. Phase 1 cleaning runs on Polars and PyArrow
 because 400k documents fit in memory on one machine and Spark would add operational cost
-for no throughput. docs/jd_coverage.md argues that, and it is still right. The mining scan
+for no throughput. The README's scope section argues that, and it is still right. The
+mining scan
 is the one job with a different shape: it reads a reserve pool sized in millions, runs an
 independent forward pass per document, and keeps the small fraction the detector is
 confidently wrong about. No shuffle, no join, no cross-document state. Embarrassingly

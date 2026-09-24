@@ -186,7 +186,7 @@ one bottleneck seen at two levels of the stack, not two.)
 
 This is the reason `kernels/cuda/` is still empty. The plan was always to profile before
 writing a kernel, and had I skipped that step I would have written a fused attention
-kernel for something worth 4.47%. See [`docs/jd_coverage.md`](docs/jd_coverage.md) for what
+kernel for something worth 4.47%. See the scope note at the end of the README for what
 the kernel is now specified to do.
 
 ### FSDP shards, and the efficiency number is not free
@@ -235,7 +235,7 @@ Batch 32 is the slowest point in the sweep, below batch 1, while making a single
 wait 15.8 seconds instead of 3.2. The code was paying five times the latency for negative
 throughput. Neither number had ever been measured; both were the value that looks right
 for a GPU. Both are now 8, and
-[`tests/unit/test_serving_batch_size.py`](tests/unit/test_serving_batch_size.py) reads the
+[`tests/unit/test_serving_batch_size.py`](../tests/unit/test_serving_batch_size.py) reads the
 committed artifact and fails if the constant and the measurement ever disagree again.
 
 `forge/inference/batching.py` says its wait window is tuned "against the P95 latency
@@ -319,7 +319,7 @@ never run on.
 > evidence were produced independently and nothing checked that the second supported the
 > first. Now the evidence is validated before the sentence is written, the sentence is
 > interpolated from those same verified fields, and
-> [`tests/unit/test_ray_launch_evidence.py`](tests/unit/test_ray_launch_evidence.py)
+> [`tests/unit/test_ray_launch_evidence.py`](../tests/unit/test_ray_launch_evidence.py)
 > refuses any committed Ray artifact whose fields are null. Every other finding in this
 > repository was a mechanism that never ran; this one ran, produced nothing, and reported
 > success.
@@ -329,7 +329,7 @@ never run on.
 The recurring job in FORGE is the flywheel itself: scan the reserve pool, cluster the
 failures, generate targeted mirrors, retrain, evaluate, gate. It is the only thing here
 that genuinely earns an orchestrator, and
-[`orchestration/dags/forge_flywheel.py`](orchestration/dags/forge_flywheel.py) is it.
+[`orchestration/dags/forge_flywheel.py`](../orchestration/dags/forge_flywheel.py) is it.
 
 Four decisions in that file are not defaults, and each has a cost behind it.
 
@@ -586,7 +586,7 @@ containing generated shards. Neither has run on a cluster, on Dataflow or on Fli
 fingerprint is recorded. A single host re-slices
 cores rather than adding them, so none of these tables is evidence that either framework
 would help at 5M documents. The architecture argument is in
-[`docs/jd_coverage.md`](docs/jd_coverage.md); these tables are evidence that the job runs
+the README's scope section; these tables are evidence that the job runs
 and scales the way its shape predicts, on two runners, over a pool whose identity is
 recorded rather than assumed.
 

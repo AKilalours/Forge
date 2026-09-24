@@ -36,5 +36,5 @@ synthetic data to generate, based on where the current model actually fails, buy
 robustness per example than generating more data at random. That is why the Failure
 Atlas sits between evaluation and generation instead of being a debugging convenience.
 
-See `docs/data_spec_v1.md` for the frozen data contract and `docs/jd_coverage.md` for
+See `docs/data_spec_v1.md` for the frozen data contract and `docs/evidence.md` for
 the infrastructure map.

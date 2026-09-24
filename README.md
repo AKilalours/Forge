@@ -55,6 +55,22 @@ winning model still misses most of the AI documents it meets.
 
 Ranking transfers. The operating point does not. That gap is the project.
 
+<p align="center">
+  <img src="images/chart_generalisation.svg" width="100%"
+       alt="AUROC stays between 0.61 and 0.95 on three unseen corpora while the miss rate
+            at the deployed threshold rises from 6% to 89%"/>
+</p>
+
+<p align="center">
+  <img src="images/chart_adversarial.svg" width="100%"
+       alt="Miss rate by attack: zero on clean text, 25.2% under 20% homoglyph
+            substitution, 87.6% when one character in ten has its case randomised"/>
+</p>
+
+<sub>Both charts are rebuilt from <code>reports/experiments/</code> by
+<code>scripts/build_readme_charts.py</code>, so a figure that disagrees with an artifact is
+a bug with a reproduction rather than a picture nobody can check.</sub>
+
 ### It runs
 
 <p align="center">
@@ -81,6 +97,19 @@ Ranking transfers. The operating point does not. That gap is the project.
 quoted elsewhere in this README, so treat the numbers on screen as illustrative of the
 layout and the tables in <a href="docs/evaluation.md">docs/evaluation.md</a> as current.</sub>
 
+### The infrastructure numbers, and the one that did not survive scale
+
+<p align="center">
+  <img src="images/chart_scaling.svg" width="100%"
+       alt="Spark speedup by partition count at 40 documents and at 2,000: 1.46x collapses
+            to 1.09x once the scan is large enough that startup stops dominating"/>
+</p>
+
+<sub>The 40-document sweep is in <code>reports/experiments/spark/</code> and the
+2,000-document one over the Common Crawl reserve pool is in
+<code>reports/experiments/spark_reserve/</code>. Both are kept, because the disagreement
+between them is the finding.</sub>
+
 ### Look at it
 
 - **[The evidence page](https://akilalours.github.io/Panagram_Forge/)** — charts, the
@@ -98,6 +127,7 @@ pip install -e ".[dev,serve,train,data]"
 pytest tests/unit -q                      # the regression suite
 python scripts/check_readme_claims.py     # fail if a published number drifted
 python scripts/build_evidence_page.py     # rebuild the evidence page
+python scripts/build_readme_charts.py     # rebuild this README's charts
 streamlit run streamlit_app.py            # the deployed interface
 ```
 

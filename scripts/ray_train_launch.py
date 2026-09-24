@@ -18,7 +18,8 @@ this repository enforces everywhere survives being launched by a different launc
 
 THE HONEST LIMIT, STATED ONCE. This has never run on GPU and never on more than one
 machine, which is the only situation where Ray earns its place. A single-node CPU run is
-evidence that the wiring is correct and evidence of nothing else. docs/jd_coverage.md says
+evidence that the wiring is correct and evidence of nothing else. The README's scope
+section says
 the same thing in the row it belongs to.
 """
 
