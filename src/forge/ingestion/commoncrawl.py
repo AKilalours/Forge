@@ -228,7 +228,7 @@ def stream_segment(
 
     acquired = datetime.now(timezone.utc)
 
-    with _open_segment(segment, timeout) as (body, declared):
+    with _open_segment_guarded(segment, timeout) as (body, declared):
         if verify_length and declared is None:
             raise CrawlStreamError(
                 f"{segment.name} was served without a Content-Length, so a truncated "
@@ -266,6 +266,32 @@ def stream_segment(
 def is_local(path: str) -> bool:
     """A segment path that names a file on this machine rather than a crawl object."""
     return path.startswith("/") or path.startswith("file://")
+
+
+@contextmanager
+def _open_segment_guarded(segment: Segment, timeout: int):
+    """_open_segment, with its failures converted to CrawlStreamError.
+
+    OPENING THE STREAM NEEDS THE GUARD TOO. The first version wrapped only the read loop,
+    so a 503 from data.commoncrawl.org raised requests.HTTPError out of _open_segment,
+    never became a CrawlStreamError, and went straight past the retry that exists for it.
+    Same mistake as the ProtocolError one, made one line earlier in the function: the
+    failure was in the part that was not wrapped. A 284-segment run died at minute 22 on
+
+        503 Server Error: Service Unavailable for url: .../00053.warc.wet.gz
+
+    which is a transient overload response, not a missing file, and is exactly what a
+    retry is for.
+    """
+    try:
+        with _open_segment(segment, timeout) as opened:
+            yield opened
+    except CrawlStreamError:
+        raise
+    except TRANSPORT_ERRORS as error:
+        raise CrawlStreamError(
+            f"{segment.name} could not be opened ({type(error).__name__}: {error})"
+        ) from error
 
 
 @contextmanager

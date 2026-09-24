@@ -127,6 +127,17 @@ def export(arm, path: Path) -> Path:
             opset_version=OPSET,
             do_constant_folding=True,
         )
+    # A 184M-parameter model is not a 145 KB file. The dynamo exporter writes weights to
+    # a sibling .data file, so the graph alone is tiny and an export that produced NO
+    # weights at all looks exactly the same from the graph's size. Both are checked.
+    weights = path.with_suffix(".onnx.data")
+    total = path.stat().st_size + (weights.stat().st_size if weights.exists() else 0)
+    if total < 100_000_000:
+        raise SystemExit(
+            f"the export produced {total / 1e6:.1f} MB across {path.name} and its external "
+            f"data. A DeBERTa-v3-base arm is roughly 700 MB, so this graph is missing its "
+            f"weights and anything measured on it would be meaningless."
+        )
     return path
 
 
@@ -250,11 +261,23 @@ def main(argv: list[str] | None = None) -> int:
 
     onnx_path = REPO / "outputs" / arm.experiment / "model.onnx"
     export(arm, onnx_path)
-    print(f"exported {onnx_path} ({onnx_path.stat().st_size / 1e6:.0f} MB)", flush=True)
+    weights = onnx_path.with_suffix(".onnx.data")
+    print(f"exported {onnx_path} (graph {onnx_path.stat().st_size / 1e6:.1f} MB"
+          + (f" + weights {weights.stat().st_size / 1e6:.0f} MB)" if weights.exists() else ")"),
+          flush=True)
 
     variants = {"float32": onnx_path}
     if args.quantize:
-        variants["int8"] = quantize(onnx_path)
+        # NOT FATAL. The float32 export is the deliverable; int8 is the optimisation on
+        # top of it. The first run died here, inside onnxruntime's shape inference, and
+        # took the float32 benchmark down with it: a run that had already produced a
+        # valid model reported nothing at all.
+        try:
+            variants["int8"] = quantize(onnx_path)
+        except Exception as error:                  # noqa: BLE001 - reported, not hidden
+            print(f"int8 quantisation failed and is being skipped: "
+                  f"{type(error).__name__}: {error}", flush=True)
+            print("  float32 results below are unaffected.", flush=True)
 
     REPORTS.mkdir(parents=True, exist_ok=True)
     report = {

@@ -258,3 +258,34 @@ def test_the_transport_error_list_covers_the_library_actually_used():
     from forge.ingestion.commoncrawl import TRANSPORT_ERRORS
 
     assert issubclass(urllib3.exceptions.ProtocolError, TRANSPORT_ERRORS)
+
+
+def test_a_503_while_opening_becomes_a_retryable_error(monkeypatch):
+    """The second run's failure: a 503 at minute 22, from OPENING the stream.
+
+    The guard wrapped the read loop and not the open, so requests.HTTPError escaped
+    unconverted and the per-segment retry never saw it. A 503 from Common Crawl is a
+    transient overload response, which is precisely what the retry exists for.
+    """
+    requests = pytest.importorskip("requests")
+
+    class _Response:
+        status_code = 503
+        headers: dict = {}
+
+        def raise_for_status(self):
+            raise requests.exceptions.HTTPError("503 Server Error: Service Unavailable")
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+    monkeypatch.setattr(
+        "forge.ingestion.commoncrawl._requests",
+        lambda: type("R", (), {"get": staticmethod(lambda url, **kw: _Response())}),
+    )
+
+    with pytest.raises(CrawlStreamError, match="could not be opened"):
+        list(stream_segment(SEGMENT))

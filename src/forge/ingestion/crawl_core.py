@@ -54,6 +54,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import random
 import time
 from collections import Counter
 from collections.abc import Iterable, Iterator
@@ -202,7 +203,7 @@ def policy_record(policy: CleaningPolicy) -> dict:
 # ----------------------------------------------------------------------- stage 1: clean
 
 def clean_segment(path: str, plan: CrawlPlan, policy: CleaningPolicy,
-                  retries: int = 2) -> Iterator[dict]:
+                  retries: int = 4) -> Iterator[dict]:
     """Every document one segment yields, cleaned but NOT deduplicated.
 
     `policy` is required, not defaulted. See the module docstring: the default policy is
@@ -243,7 +244,11 @@ def clean_segment(path: str, plan: CrawlPlan, policy: CleaningPolicy,
                 rows.append(row)
         except CrawlStreamError as error:
             last_error = error
-            time.sleep(min(2 ** attempt, 8))
+            # Longer and jittered, because the failure that prompted it was a 503 from
+            # data.commoncrawl.org under eight concurrent streams. A tight retry against
+            # an overloaded server is not a retry, it is more load. Jitter so eight
+            # workers that hit the same wall do not come back in lockstep.
+            time.sleep(min(5 * 2 ** attempt, 60) * (0.5 + random.random()))
             continue
 
         yield from rows
