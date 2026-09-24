@@ -156,11 +156,16 @@ def load_arm(arm: str) -> Arm:
     from forge.training.train import load_checkpoint
 
     summary = json.loads(summary_path.read_text())
+    # pretrained=False and mmap=True are both about the deployed host's 2.7 GB. The
+    # pretrained backbone would be downloaded and allocated only to be overwritten by the
+    # line below, and an unmapped load would hold a second full copy of the weights while
+    # it happened. Neither changes what is served: load_state_dict is strict, so a
+    # checkpoint that did not cover every parameter would raise rather than leave noise.
     model = build_model(ForgeConfig(
         backbone=mcfg["backbone"], max_length=mcfg["max_length"],
         stride=mcfg["window"]["stride"],
-    ))
-    load_checkpoint(checkpoint, model)
+    ), pretrained=False)
+    load_checkpoint(checkpoint, model, mmap=True)
 
     # FLOAT32, ALWAYS, ON CPU. Training ran in bf16, so parts of the checkpoint come back
     # half precision. CPU matrix multiply refuses to mix: "mat1 and mat2 must have the same

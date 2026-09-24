@@ -37,8 +37,23 @@ class ForgeConfig:
     doc_loss_weight: float = 1.0
 
 
-def build_model(config: ForgeConfig):  # pragma: no cover - needs torch
-    """Construct the model. Imports torch lazily and fails with a useful message."""
+def build_model(config: ForgeConfig, pretrained: bool = True):  # pragma: no cover - needs torch
+    """Construct the model. Imports torch lazily and fails with a useful message.
+
+    `pretrained=False` builds the architecture WITHOUT fetching the backbone's pretrained
+    weights. It exists for serving, where the very next thing that happens is
+    load_checkpoint overwriting every encoder tensor with a trained one. Fetching them
+    first downloads 371 MB, writes it to disk and allocates a full copy of the encoder,
+    all of it discarded microseconds later, on a host that has 2.7 GB in total and is
+    about to load a 735 MB checkpoint.
+
+    It cannot silently serve random weights: load_checkpoint calls load_state_dict with
+    strict=True by default, so a checkpoint that does not cover every parameter raises
+    instead of leaving initialised noise in the gaps.
+
+    Training keeps the default. Fine-tuning from random init would be a different
+    experiment.
+    """
     try:
         import torch  # noqa: F401  # the import IS the availability probe
         from torch import nn
@@ -53,7 +68,11 @@ def build_model(config: ForgeConfig):  # pragma: no cover - needs torch
             super().__init__()
             self.cfg = cfg
             hf_cfg = AutoConfig.from_pretrained(cfg.backbone)
-            self.encoder = AutoModel.from_pretrained(cfg.backbone, config=hf_cfg)
+            self.encoder = (
+                AutoModel.from_pretrained(cfg.backbone, config=hf_cfg)
+                if pretrained
+                else AutoModel.from_config(hf_cfg)
+            )
             hidden = hf_cfg.hidden_size
             self.dropout = nn.Dropout(cfg.dropout)
             self.doc_head = nn.Linear(hidden, N_DOC_CLASSES)

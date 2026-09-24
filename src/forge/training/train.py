@@ -137,10 +137,22 @@ def save_checkpoint(path, model, optimizer, scheduler, scaler, state: TrainState
     Path(str(path) + ".json").write_text(json.dumps(asdict(state), indent=2) + "\n")
 
 
-def load_checkpoint(path, model, optimizer=None, scheduler=None, scaler=None) -> TrainState:
+def load_checkpoint(path, model, optimizer=None, scheduler=None, scaler=None,
+                    mmap: bool = False) -> TrainState:
+    """Restore a checkpoint. `mmap=True` maps the tensors instead of reading them.
+
+    Serving passes it. Without it, torch.load holds all 735 MB of weights in memory while
+    the model already holds its own 736 MB copy, so the peak is roughly twice the model
+    at the one moment a 2.7 GB host can least afford it. Mapped pages are read on demand
+    and are evictable, and load_state_dict copies into the model either way, so the
+    resident result is identical.
+
+    Training keeps the default: a resume also restores optimizer state, which is not a
+    parameter of the model and is not what this helps with.
+    """
     import torch
 
-    ck = torch.load(path, map_location="cpu", weights_only=False)
+    ck = torch.load(path, map_location="cpu", weights_only=False, mmap=mmap)
     model.load_state_dict(ck["model"])
     if optimizer and ck.get("optimizer"):
         optimizer.load_state_dict(ck["optimizer"])
