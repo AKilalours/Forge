@@ -326,3 +326,16 @@ def test_the_streamlit_page_does_not_describe_behaviour_it_no_longer_has():
     footer = page[page.index("st.divider()"):]
     assert "one text arm is held in memory" not in footer.lower()
     assert "Built by Akila Lourdes Miriyala Francis" in footer
+
+
+def test_a_page_that_asked_for_one_arm_does_not_apologise_for_having_one():
+    """The deployed page requests a single arm on purpose.
+
+    "Only one arm is loaded" was written for the case above, where a second arm was asked
+    for and failed. On a page that never asked, it reads as a fault report about a page
+    that is working exactly as designed, which is worse than saying nothing.
+    """
+    html = text_result(_text_payload(arms=[_arm("mirror", "B: matched mirrors")]))
+
+    assert "Only one arm is loaded" not in html
+    assert "Mean over" in html          # the useful half of that sentence stays

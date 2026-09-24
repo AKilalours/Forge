@@ -89,12 +89,27 @@ def text_tab() -> None:
         placeholder="Paste text to analyse. A few paragraphs works best; very short "
                     "passages carry little signal.",
     )
-    arm = st.radio(
-        "Arm", ("mirror", "baseline"), horizontal=True,
-        help="One at a time. Switching evicts the other rather than accumulating, because "
-             "two arms do not fit in this host's memory. The two-arm comparison is in "
-             "docs/evaluation.md.",
-    )
+    # THE ARM SELECTOR IS NOT A QUESTION FOR A VISITOR. It was the third thing on the page,
+    # asking someone to choose between "mirror" and "baseline" with no basis for deciding
+    # and no idea what the words mean. The two arms are this project's experimental
+    # control, not a product feature: B is what is deployed and what a visitor should get
+    # without being asked. Anyone who wants the comparison opens the section below and
+    # finds it explained in two sentences.
+    LABELS = {"B: matched mirrors": "mirror", "A: random synthetic": "baseline"}
+    arm = "mirror"
+    with st.expander("Compare the two detectors"):
+        st.markdown(
+            "This project trained **two** detectors on the same human writing but "
+            "different synthetic writing.\n\n"
+            "- **A** learned from synthetic text generated at random.\n"
+            "- **B** learned from synthetic text written to mirror specific human "
+            "documents, which is the idea being tested: that choosing *which* synthetic "
+            "data to generate beats generating more of it.\n\n"
+            "On text like this they agree, because both were trained for it. The "
+            "experiment is about where they come apart, and that is reported in "
+            "`docs/evaluation.md`, not here. **B serves your result** unless you change it."
+        )
+        arm = LABELS[st.radio("Detector", list(LABELS), horizontal=True)]
     if not st.button("Analyse text", type="primary"):
         return
     if not text.strip():
@@ -142,8 +157,12 @@ def image_tab() -> None:
     # the honest cost of computing every panel rather than asserting one.
     with st.spinner("Analysing. Forensics, detector, robustness over 11 edits, attribution."):
         try:
+            # Occlusion attribution and the pixel maps stay: they are what SHOW the
+            # analysis rather than assert it. Detector robustness does not: eleven
+            # re-scored transforms cost 6.5 s of a 14 s analysis and render as a row of
+            # chips a visitor has no way to act on. It remains on the FastAPI page.
             payload = analyse(data, filename=upload.name, with_stability=False,
-                              with_diagnostics=False)
+                              with_robustness=False)
         except UnsupportedImage as refusal:
             st.error(str(refusal))
             return

@@ -75,10 +75,26 @@ def test_an_ai_verdict_is_unaffected_by_the_caveat():
     assert 'class="assess big hot"' in out
 
 
-def test_compact_drops_the_diagnostics_and_full_keeps_them():
-    compact = image_result(_payload(MEASURED), compact=True)
-    full = image_result(_payload(MEASURED), compact=False)
+def test_compact_keeps_what_shows_the_analysis_and_drops_what_does_not():
+    """Not everything expensive is noise.
 
-    for section in ("Robustness", "occlusion", "Pixel statistics"):
-        assert section.lower() not in compact.lower()
+    The occlusion map marks the regions the decision rested on and the pixel statistics
+    are computed from the file with no model at all: both SHOW the analysis rather than
+    assert it, and both stay. The eleven-chip robustness row and the timing table do not:
+    a visitor cannot act on either and they pushed the verdict off the screen.
+    """
+    payload = _payload(MEASURED)
+    payload["attribution_map"] = {
+        "grid": 5, "image": "data:image/png;base64,AA", "base_probability": 0.021,
+        "peak": {"drop": 0.008}, "reading": "",
+    }
+    payload["maps"] = [{"title": "Noise floor", "image": "data:image/png;base64,AA",
+                        "short": "Sensor noise per cell."}]
+
+    compact = image_result(payload, compact=True)
+    full = image_result(payload, compact=False)
+
+    assert "occlusion" in compact.lower()
+    assert "pixel statistics" in compact.lower()
+    assert "robustness" not in compact.lower()
     assert "robustness" in full.lower()

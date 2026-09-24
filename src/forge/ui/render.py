@@ -328,14 +328,17 @@ def image_result(payload: dict, compact: bool = False) -> str:
     )
 
     if compact:
-        # THE DEPLOYED PAGE SHOWS THE VERDICT AND WHAT IT RESTS ON, AND STOPS. Robustness,
-        # occlusion attribution, pixel statistics and the timing table are diagnostics: a
-        # reader deciding whether to trust one image does not need eleven re-scored
-        # transforms and a 5x5 occlusion grid, and burying the verdict under them makes
-        # the page read as thorough rather than as clear. They remain on the FastAPI
-        # reference page, which is where the diagnostics live.
+        # THE DEPLOYED PAGE SHOWS THE VERDICT, WHAT IT RESTS ON, AND THE TWO PANELS THAT
+        # SHOW THE ANALYSIS RATHER THAN ASSERT IT: the occlusion map, which marks the
+        # regions the decision actually used, and the pixel statistics, which are computed
+        # from the file with no model at all. What is dropped is the eleven-chip
+        # robustness row and the timing table: a visitor cannot act on either, and they
+        # pushed the verdict off the screen. Both remain on the FastAPI reference page.
         return head + (
-            '<div class="grid">' + image_card + evidence_card + signals_card + "</div>"
+            '<div class="grid">' + image_card + evidence_card + signals_card
+            + _attribution_card(payload.get("attribution_map"))
+            + _maps_card(payload.get("maps") or [])
+            + "</div>"
         )
 
     return head + (
@@ -407,16 +410,24 @@ def text_result(payload: dict) -> str:
         opening = ("Both arms agree." if agree else
                    "THE ARMS DISAGREE: "
                    + ", ".join(f'{a["label"]} says {a["verdict"]}' for a in arms) + ".")
-    else:
+    elif payload.get("unavailable"):
+        # An arm WAS asked for and did not load. That is a shortfall and it is stated,
+        # alongside the reason, further down the page.
         opening = "Only one arm is loaded."
+    else:
+        # Only one arm was ever requested. That is the deployed page's design, not a
+        # shortfall, and "Only one arm is loaded" read to a visitor as though something
+        # had failed. A page apologising for working correctly is worse than a silent one.
+        opening = ""
 
     plural = "" if primary["n_windows"] == 1 else "s"
     head = banner(
         available=True,
         verdict=primary["verdict"],
         probability=primary["ai_probability"],
-        reason=f'{opening} Mean over {primary["n_windows"]} window{plural}, '
-               f'{payload["words"]} words.',
+        reason=(f'{opening} ' if opening else '') + (
+            f'Mean over {primary["n_windows"]} window{plural}, '
+            f'{payload["words"]} words.'),
         score_label="AI probability, calibrated",
         threshold=primary["threshold"],
         score_note=(

@@ -487,7 +487,8 @@ def build_report(
     preview: str | None = None,
     with_stability: bool = False,
     with_detector: bool = True,
-    with_diagnostics: bool = True,
+    with_attribution: bool = True,
+    with_robustness: bool = True,
 ) -> Report:
     """Analyse one image end to end. Pure CPU: no GPU, no network, no model weights.
 
@@ -561,13 +562,14 @@ def build_report(
         ),
     )
 
-    # DIAGNOSTICS ARE OPT-OUT BECAUSE THEY DOMINATE THE CLOCK. Occlusion attribution
-    # re-scores 25 masked copies and detector robustness re-scores 11 transformed ones:
-    # 6.4 s and 6.5 s of a 14 s analysis, measured. The deployed page does not render
-    # either, and computing a result nobody sees is the kind of waste that only shows up
-    # as "the demo is slow".
+    # THE TWO EXPENSIVE PASSES ARE GATED SEPARATELY, because the deployed page wants one
+    # and not the other. Occlusion attribution re-scores 25 masked copies (6.4 s) and
+    # detector robustness re-scores 11 transformed ones (6.5 s), of a 14 s analysis,
+    # measured. The page renders the attribution map, because it shows which regions the
+    # decision rested on, and does not render the robustness chips. Computing a result
+    # nobody sees is the kind of waste that only ever surfaces as "the demo is slow".
     attribution: dict = {}
-    if detector_obj is not None and with_diagnostics:
+    if detector_obj is not None and with_attribution:
         built = _timed(
             "attribution",
             lambda: occlusion_attribution(detector_obj, data),
@@ -575,7 +577,7 @@ def build_report(
         attribution = built.as_dict() if built is not None else {}
 
     robustness: list[dict] = []
-    if detector_obj is not None and with_diagnostics:
+    if detector_obj is not None and with_robustness:
         robustness = _timed(
             "detector_robustness",
             lambda: _detector_robustness(data, detector_obj),
