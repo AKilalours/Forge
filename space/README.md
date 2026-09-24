@@ -33,6 +33,6 @@ their calibration error rises from 0.004 to between 0.18 and 0.44. Text from GPT
 models will mostly read as no AI detected. That is the published result, not a malfunction,
 and it is on the Results tab.
 
-Source: https://github.com/AKilalours/forge-ai-detection
+Source: https://github.com/AKilalours/Forge_Panagram
 
 Built by Akila Lourdes Miriyala Francis
