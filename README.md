@@ -112,9 +112,6 @@ between them is the finding.</sub>
 
 ### Look at it
 
-- **[The evidence page](https://akilalours.github.io/Panagram_Forge/)** — charts, the
-  adversarial results, and every infrastructure run, generated from the artifacts so it
-  cannot drift from them. Every figure can show the file it came from.
 - **[The long-form record](docs/evidence.md)** — the full write-up, including each
   measurement I got wrong first and what the mistake was.
 - **[reports/experiments/](reports/experiments)** — the committed JSON everything is
