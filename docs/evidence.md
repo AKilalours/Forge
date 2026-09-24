@@ -561,6 +561,42 @@ Records: [`reports/experiments/profile/`](reports/experiments/profile),
 
 ---
 
+## 🌐 Mining the Internet, Actually Run
+
+The reserve pool this project's flywheel needs did not exist until this run. It does now: **5,638,371 Common Crawl documents streamed and cleaned in 2.05 hours**, on a laptop, at 762 documents per second across 4 Spark workers. Artifact: [`reserve report`](../reports/experiments/crawl/spark/ab6890f623a36785-p4-s32.json).
+
+| | |
+|---|---|
+| Crawl | CC-MAIN-2026-34, plan fingerprint `ab6890f623a36785` |
+| Segments | 270 read of 284 planned |
+| Documents streamed | 5,638,371 |
+| Kept by the cleaning policy | 96,039 (1.70%) |
+| Exact duplicates removed | 5,091 |
+| Already in the training corpus | 0 |
+| **Written to the reserve pool** | **90,948** (72,803 train, 9,041 val, 9,104 test) |
+| Corpus fingerprint | `cfb144546adc2165` |
+
+### What the rejection breakdown says
+
+| Reason | Documents | Share of everything streamed |
+|---|---|---|
+| `too_long_tokens` | 3,325,856 | 59.0% |
+| `language` | 1,269,280 | 22.5% |
+| `too_short_chars` | 637,917 | 11.3% |
+| `too_short_tokens` | 298,779 | 5.3% |
+| `repetitive_lines` | 9,050 | 0.2% |
+
+**The 400-token cap is the dominant filter, not language.** `too_long_tokens` removes 59% of the crawl against 23% for non-English. That cap comes from v0.1-min, where 400 tokens is exactly one 512-token window, and it is the recorded limitation that makes FORGE v1 a single-window detector. It was worth measuring rather than assuming: an earlier probe run under the DEFAULT cleaning policy reported a 9.6% keep rate, against 1.70% under the policy the models were actually trained on. Building the reserve pool under the wrong one would have filled it with documents longer than anything the detector has seen, and every false positive it produced would have been measuring that instead of the detector.
+
+**Zero of 5,638,371 documents matched a training hash.** That is measured, not assumed: every content hash was checked against all 60,000 in `data/silver`. It is weaker evidence than it looks, because the check is exact-hash after normalisation and redaction, so a recrawl of the same page with one changed byte does not match. It rules out the crude failure and not the subtle one.
+
+### Fourteen segments failed, and the run finished anyway
+
+All 14 failures were HTTP 503 from data.commoncrawl.org, and all of them fall in a contiguous block of segment numbers, which is a server-side window rather than 14 independent faults. Each one was retried four times with backoff to a minute before being recorded.
+
+That design is deliberate. An earlier version raised on the first failure and lost 37 minutes of completed work; the version before that lost 22. Losing 270 good segments to 14 bad ones is the worse outcome, so the run continues and the failures are listed per segment with their URLs, the CLI exits non-zero, and the report records `segments_read` as 270 rather than 284. A corpus assembled from fewer segments than were planned cannot be reproduced from the plan alone, and the artifact has to say so.
+
+---
 ## 🛡️ Adversarial: what breaks the detector, and what fixes it for free
 
 Four preprocessing conditions, each scored against **its own** clean baseline, because folding and casefolding move clean documents too and a defence that lowers the attacked miss rate by moving everything is not a defence. 250 AI documents per arm, 1,000 human documents for the cost side. Artifacts: [`adversarial_forge_min_baseline.json`](../reports/experiments/adversarial_forge_min_baseline.json), [`adversarial_forge_min_mirror.json`](../reports/experiments/adversarial_forge_min_mirror.json).
