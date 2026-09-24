@@ -237,6 +237,31 @@ def close(published: str, stored: float, *, percent: bool = False) -> bool:
     return round(value, decimals) == round(want, decimals)
 
 
+def missing_images() -> list[str]:
+    """Every local image the README and the evidence page point at must exist.
+
+    WRITTEN AFTER SHIPPING FOUR BROKEN ONES. Cutting the README to one screen moved its
+    long-form half into docs/, and every `images/...` path in the moved text silently
+    stopped resolving, because the same relative path now started one directory deeper.
+    Nothing failed: GitHub renders a broken image as a small grey icon, and the only
+    reader who notices is the one you were trying to impress. A claim gate that checks
+    every number and not whether the screenshots load is checking the easy half.
+    """
+    import re
+
+    problems = []
+    for name in ("README.md", "docs/evidence.md"):
+        page = ROOT / name
+        if not page.exists():
+            continue
+        for match in re.finditer(r'(?:src=|]\()\s*"?((?!https?:|data:)[^"\')\s]+\.(?:png|jpe?g|gif|svg|webp))',
+                                 page.read_text()):
+            target = (page.parent / match.group(1)).resolve()
+            if not target.exists():
+                problems.append(f"{name} points at {match.group(1)}, which does not exist")
+    return problems
+
+
 def main(check_test_count: bool = True) -> int:
     """check_test_count is False when called from inside pytest, because the count is
     obtained BY running pytest and a test that spawns the collector it is running under
@@ -252,6 +277,7 @@ def main(check_test_count: bool = True) -> int:
         if (ROOT / name).exists()
     )
     bad: list[str] = []
+    bad += missing_images()
 
     # ---- out-of-distribution table -----------------------------------------
     ood = table_rows(md, "| Benchmark | AUROC · A |")

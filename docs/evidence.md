@@ -358,9 +358,11 @@ this repository today, and a scheduler turns occasional into routine.
 > **What is claimed and what is not.** The DAG is implemented, parses under Airflow 3, and
 > its 11 tests run in **their own CI job** rather than skipping in the main one, because
 > `importorskip("airflow")` in a job that does not install Airflow is how a test file goes
-> unrun for months. It has **never been run against a real corpus**: `data/reserve/` is
-> empty because the corpus is not redistributable. This is a validated pipeline definition,
-> not a pipeline with a run history.
+> unrun for months. It has **never been run end to end by a scheduler**. The reserve pool
+> it would mine now exists, 96 shards and 90,948 documents streamed from Common Crawl,
+> fingerprint `88d6a7e70baf352b`, and the scan has been run over it by hand; what has not
+> happened is Airflow triggering that scan on a schedule and acting on the result. This is
+> a validated pipeline definition, not a pipeline with a run history.
 
 ### DeepSpeed against FSDP, on the same hardware, at the same global batch
 
@@ -530,6 +532,40 @@ startup across the same sweep.
 > improved by 51% and the parallel arms by less. A speedup is a ratio, and a ratio is only
 > as honest as its denominator. Twice now.
 
+### The same sweep at fifty times the scale, where the speedup disappears
+
+The three tables above scan 40 documents. That is a pilot, and a pilot at that size is
+mostly startup. So the Spark sweep was run again over the reserve pool built from Common
+Crawl in this repo, **96 shards, 90,948 rows, fingerprint `88d6a7e70baf352b`**, scanning
+**2,000 documents** per partition count instead of 40.
+
+| Partitions | Threads each | Docs/s (compute) | Speedup | Skew | Wall (s) |
+|---|---|---|---|---|---|
+| 1 | 10 | 2.094 | 1.00 | 1.00 | 972.1 |
+| 2 | 5 | 2.092 | 0.999 | 1.008 | 974.2 |
+| 4 | 2 | 2.279 | 1.088 | 1.055 | 898.2 |
+
+**The 1.46x is gone.** At 40 documents four partitions looked 46% faster than one; at 2,000
+they are 8.8% faster, and two partitions are a rounding error slower than one. Nothing about
+the job changed between the two runs. What changed is how much of the measured interval was
+fixed cost: at 40 documents the per-process model load and JVM startup are a large fraction
+of the run, and slicing them across workers looks like a speedup. Scan fifty times as much
+and the compute dominates, the constant thread budget binds, and the curve flattens to what
+the hardware actually allows.
+
+Throughput also falls, 3.46 docs/s to 2.09, because the two pools are not the same corpus.
+The pilot reads `data/silver`; this reads real Common Crawl text, which is longer and more
+varied, so there is more to score per document. The two absolute rates are not comparable
+and are not being compared. What is being compared is the *shape* of the scaling curve on
+one pool at two sizes, and the honest reading is that the earlier speedup column was
+measuring startup amortisation and calling it parallelism.
+
+Beam has not been re-run at this size, so there is no Beam row here, and the Beam tables
+above stay attached to the 40-document pool they were measured on.
+
+Records: [`reports/experiments/spark_reserve/`](reports/experiments/spark_reserve) for the
+2,000-document run, [`reports/experiments/spark/`](reports/experiments/spark) for the pilot.
+
 **What the port was actually worth, which was not the numbers.** Expressing the same job on
 a second substrate is what tested whether the job was separable from its runner. It was not:
 everything that decided whether the scan finishes was sitting inside a module named after
@@ -546,7 +582,8 @@ after acquiring the scorer credits the load to every thread that merely waited o
 **So the claim this repository makes is narrow.** Both jobs exist, are tested, parallelise
 without skew, refuse to mine from anything that is not the reserve pool, and refuse a pool
 containing generated shards. Neither has run on a cluster, on Dataflow or on Flink, and
-`data/reserve/` is empty because the corpus is not redistributed. A single host re-slices
+`data/reserve/` is not redistributed with this repository, though it exists and its
+fingerprint is recorded. A single host re-slices
 cores rather than adding them, so none of these tables is evidence that either framework
 would help at 5M documents. The architecture argument is in
 [`docs/jd_coverage.md`](docs/jd_coverage.md); these tables are evidence that the job runs
@@ -905,7 +942,7 @@ Panagram_Forge/
 ├── streamlit_app.py        # deployed interface
 ├── scripts/                # eval_ood · ood_mcnemar · image_detector_probe · …
 ├── reports/experiments/    # every committed run record and score array
-├── docs/                   # evaluation · writeup · model card · data spec
+├── docs/                   # evaluation · writeup · data spec
 ├── demo/                   # held-in AI samples for testing the text tab
 └── tests/unit/             # 1157 tests, most named after a real bug
 ```

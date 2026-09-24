@@ -1,7 +1,5 @@
 {
- "mode": "beam fnapirunner multi_processing",
- "runner": "FnApiRunner",
- "running_mode": "multi_processing",
+ "mode": "spark local",
  "root": "data/reserve",
  "is_reserve_pool": true,
  "mining_candidates_written": true,
@@ -9,7 +7,6 @@
  "arm": "mirror",
  "threshold": 0.99,
  "partitions": 1,
- "partitions_reporting": 1,
  "files": 96,
  "pattern": "source=*/split=*/*.parquet",
  "pool": {
@@ -122,14 +119,12 @@
  "documents_scanned": 2000,
  "scoring_errors": 0,
  "above_threshold": 2,
- "model_loads": 1,
- "distinct_worker_pids": 1,
- "wall_seconds": 1446.64,
- "documents_per_second_wall": 1.383,
- "documents_per_second_compute": 1.398,
- "startup_seconds": 15.95,
+ "wall_seconds": 972.1,
+ "documents_per_second_wall": 2.057,
+ "documents_per_second_compute": 2.094,
+ "startup_seconds": 17.05,
  "per_partition_seconds": [
-  1430.68
+  955.05
  ],
  "skew": 1.0,
  "candidate_ids": [

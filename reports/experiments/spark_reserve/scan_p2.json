@@ -1,15 +1,12 @@
 {
- "mode": "beam fnapirunner multi_processing",
- "runner": "FnApiRunner",
- "running_mode": "multi_processing",
+ "mode": "spark local",
  "root": "data/reserve",
  "is_reserve_pool": true,
  "mining_candidates_written": true,
  "why": "Reserve pool scan; candidates are valid mining input.",
  "arm": "mirror",
  "threshold": 0.99,
- "partitions": 1,
- "partitions_reporting": 1,
+ "partitions": 2,
  "files": 96,
  "pattern": "source=*/split=*/*.parquet",
  "pool": {
@@ -116,22 +113,21 @@
   ]
  },
  "total_docs_budget": 2000,
- "docs_per_partition_cap": 2000,
- "torch_threads_per_partition": 10,
+ "docs_per_partition_cap": 1000,
+ "torch_threads_per_partition": 5,
  "host_cpu_count": 10,
  "documents_scanned": 2000,
  "scoring_errors": 0,
  "above_threshold": 2,
- "model_loads": 1,
- "distinct_worker_pids": 1,
- "wall_seconds": 1446.64,
- "documents_per_second_wall": 1.383,
- "documents_per_second_compute": 1.398,
- "startup_seconds": 15.95,
+ "wall_seconds": 974.18,
+ "documents_per_second_wall": 2.053,
+ "documents_per_second_compute": 2.092,
+ "startup_seconds": 18.31,
  "per_partition_seconds": [
-  1430.68
+  955.87,
+  940.21
  ],
- "skew": 1.0,
+ "skew": 1.008,
  "candidate_ids": [
   "cc_urn:uuid:0abb0975-e7a9-491e-ab98-d9470dd8ae21",
   "cc_urn:uuid:98b0b62a-4e2d-48bc-b952-8b628d3e1f93"

@@ -22,7 +22,7 @@
 <p align="center">
   <a href="docs/evaluation.md"><b>Evaluation</b></a> ·
   <a href="docs/writeup.md"><b>Writeup</b></a> ·
-  <a href="docs/model_card.md"><b>Model card</b></a> ·
+  <a href="docs/jd_coverage.md"><b>What is and is not implemented</b></a>
 </p>
 
 <p align="center">
@@ -55,6 +55,32 @@ winning model still misses most of the AI documents it meets.
 | **Matched mirrors** | 0.99989 | **0.950** | **62.2%** |
 
 Ranking transfers. The operating point does not. That gap is the project.
+
+### It runs
+
+<p align="center">
+  <img src="images/text_verdict.png" width="90%"
+       alt="Text tab: one document scored by both arms, each against its own threshold"/>
+  <br/>
+  <sub>One document, scored by both arms at once. Each arm carries its own deployed
+  threshold, the false-positive budget it was fitted at, and its validation FNR and ECE,
+  because a probability without them is decoration. The panel underneath states the
+  out-of-distribution miss rate rather than hiding it.</sub>
+</p>
+
+<p align="center">
+  <img src="images/image_verdict.png" width="90%"
+       alt="Image tab: a camera photograph cleared, with the file signals that support it"/>
+  <br/>
+  <sub>A real photograph. The visual detector returns 0.92% and the file still carries its
+  Canon EOS R6 Mark III fields, so the evidence agrees. C2PA and generation markers are
+  reported as <b>not found</b> rather than as absence of AI, which is the distinction the
+  banner wording turns on: this reads NO AI DETECTED, never HUMAN.</sub>
+</p>
+
+<sub>Both captures are from the running app. They are one checkpoint behind the thresholds
+quoted elsewhere in this README, so treat the numbers on screen as illustrative of the
+layout and the tables in <a href="docs/evaluation.md">docs/evaluation.md</a> as current.</sub>
 
 ### Look at it
 
