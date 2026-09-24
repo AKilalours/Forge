@@ -487,6 +487,7 @@ def build_report(
     preview: str | None = None,
     with_stability: bool = False,
     with_detector: bool = True,
+    with_diagnostics: bool = True,
 ) -> Report:
     """Analyse one image end to end. Pure CPU: no GPU, no network, no model weights.
 
@@ -526,10 +527,22 @@ def build_report(
 
             detector_obj = load_detector()
             detection = detector_obj.detect(data)
+            # RECALL TRAVELS WITH THE VERDICT. The detector is a third-party model whose
+            # own probe measured 0.55 recall at its operating point, fitted in sample on
+            # 29 images. A page that renders "NO AI DETECTED" without that number invites
+            # the reader to treat a negative as evidence of absence, when it is closer to
+            # a coin flip. The value is read from the artifact rather than written here,
+            # so re-measuring the detector updates the page.
+            from forge.image.detector import verified_polarity
+
+            record = verified_polarity(detection.model_id) or {}
             detector_info = {
                 "available": True, "model_id": detection.model_id,
                 "calibrated": detection.calibrated, "labels": list(detection.labels),
                 "polarity_verified": detection.polarity_verified,
+                "recall_at_threshold": record.get("ai_recall_at_threshold"),
+                "recall_sample": record.get("n"),
+                "recall_in_sample": record.get("operating_point_is_in_sample"),
             }
         except Exception as error:  # noqa: BLE001 - absence is reported, never substituted
             detector_info = {"available": False, "reason": str(error)}
@@ -548,8 +561,13 @@ def build_report(
         ),
     )
 
+    # DIAGNOSTICS ARE OPT-OUT BECAUSE THEY DOMINATE THE CLOCK. Occlusion attribution
+    # re-scores 25 masked copies and detector robustness re-scores 11 transformed ones:
+    # 6.4 s and 6.5 s of a 14 s analysis, measured. The deployed page does not render
+    # either, and computing a result nobody sees is the kind of waste that only shows up
+    # as "the demo is slow".
     attribution: dict = {}
-    if detector_obj is not None:
+    if detector_obj is not None and with_diagnostics:
         built = _timed(
             "attribution",
             lambda: occlusion_attribution(detector_obj, data),
@@ -557,7 +575,7 @@ def build_report(
         attribution = built.as_dict() if built is not None else {}
 
     robustness: list[dict] = []
-    if detector_obj is not None:
+    if detector_obj is not None and with_diagnostics:
         robustness = _timed(
             "detector_robustness",
             lambda: _detector_robustness(data, detector_obj),

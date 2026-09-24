@@ -142,7 +142,8 @@ def image_tab() -> None:
     # the honest cost of computing every panel rather than asserting one.
     with st.spinner("Analysing. Forensics, detector, robustness over 11 edits, attribution."):
         try:
-            payload = analyse(data, filename=upload.name, with_stability=False)
+            payload = analyse(data, filename=upload.name, with_stability=False,
+                              with_diagnostics=False)
         except UnsupportedImage as refusal:
             st.error(str(refusal))
             return
@@ -156,60 +157,23 @@ def image_tab() -> None:
         height += 620
     if payload.get("maps"):
         height += 620
-    show(image_result(payload), height=height)
-
-
-# ---------------------------------------------------------------------- engineering tab
-
-def engineering_tab() -> None:
-    """The system behind the verdict, read out of the artifacts that measured it.
-
-    NOT A COPY OF THE README. `forge.ui.evidence` opens the same JSON files the README
-    quotes and `scripts/check_readme_claims.py` gates, so this page cannot drift from them:
-    there is no number to drift. A missing artifact renders as "not measured" rather than
-    as a blank or a remembered value.
-    """
-    from forge.ui.evidence import MEASURED, build_panels
-
-    st.caption(
-        "Every figure below is read at page load from the JSON artifact written by the run "
-        "that measured it. Nothing here is typed in. Each table carries the condition "
-        "recorded with it, because these numbers mean the wrong thing without it."
-    )
-
-    panels = build_panels()
-    for panel in panels:
-        with st.expander(panel.title, expanded=(panel is panels[0])):
-            if panel.status != MEASURED:
-                st.info(panel.headline)
-                st.caption("source: " + ", ".join(panel.sources))
-                continue
-            st.markdown(f"**{panel.headline}**")
-            if panel.rows:
-                st.dataframe(
-                    [dict(zip(panel.columns, row, strict=True)) for row in panel.rows],
-                    hide_index=True,
-                    use_container_width=True,
-                )
-            for caveat in panel.caveats:
-                st.caption("⚠ " + caveat)
-            st.caption("source: " + ", ".join(panel.sources))
+    show(image_result(payload, compact=True), height=560)
 
 
 # ---------------------------------------------------------------------------------- page
 
 st.title("FORGE Detect")
-st.caption(
-    "Failure-driven synthetic data generation for robust AI-content detection. Runs on CPU."
-)
 
-text_pane, image_pane, eng_pane = st.tabs(["Text", "Image", "Engineering"])
+# TWO TABS. The Engineering tab rendered thirteen artifact-backed panels, which is the
+# right content in the wrong place: a visitor here wants a verdict on their text or their
+# image, and the measurements belong in docs/evidence.md and the generated evidence page
+# where they can be read properly. Removing it also removes every artifact read from the
+# deployed page's startup path.
+text_pane, image_pane = st.tabs(["Text", "Image"])
 with text_pane:
     text_tab()
 with image_pane:
     image_tab()
-with eng_pane:
-    engineering_tab()
 
 st.divider()
 # THE FOOTER SAID SOMETHING FALSE. It explained that one arm was held in memory at a time,

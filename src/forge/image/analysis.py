@@ -45,7 +45,8 @@ def thumbnail(data: bytes, box: int = 640) -> str | None:
         return None
 
 
-def analyse(data: bytes, filename: str = "upload", with_stability: bool = False) -> dict:
+def analyse(data: bytes, filename: str = "upload", with_stability: bool = False,
+            with_diagnostics: bool = True) -> dict:
     """Analyse one image and return the payload both pages render.
 
     The transform-survival pass is opt-in: it re-encodes the image ten times and dominates
@@ -64,7 +65,8 @@ def analyse(data: bytes, filename: str = "upload", with_stability: bool = False)
     preview_ms = int((time.perf_counter() - mark) * 1000)
 
     report = build_report(data, filename=filename, preview=preview,
-                          with_stability=with_stability)
+                          with_stability=with_stability,
+                          with_diagnostics=with_diagnostics)
     fmt = report.by_name("file_type")
     detected = fmt.value if fmt else None
     if detected not in ACCEPTED:
@@ -77,7 +79,9 @@ def analyse(data: bytes, filename: str = "upload", with_stability: bool = False)
 
     payload = report.as_dict()
     mark = time.perf_counter()
-    payload["maps"] = build_maps(data)
+    # The pixel maps are model-free and cheap, but the deployed page does not render them
+    # either, so they follow the same switch.
+    payload["maps"] = build_maps(data) if with_diagnostics else []
     payload["timings_ms"] = dict(payload.get("timings_ms") or {})
     payload["timings_ms"]["preview"] = preview_ms
     payload["timings_ms"]["forensic_maps"] = int((time.perf_counter() - mark) * 1000)

@@ -121,13 +121,27 @@ def test_the_committed_artifacts_all_render():
 
 
 def test_the_page_wires_the_panel_in():
+    """A panel that nothing renders is a measurement nobody reads.
+
+    The consumer used to be the Streamlit app's Engineering tab. That tab was removed
+    from the deployed page: a visitor there wants a verdict on their own text or image,
+    and thirteen artifact tables buried it. The panels did not go anywhere, so this test
+    follows them to their consumer rather than being deleted with the tab, which is what
+    would have let build_panels quietly become dead code.
+    """
+    builder = pathlib.Path(evidence.REPO_ROOT / "scripts" / "build_evidence_page.py").read_text()
+    assert "build_panels" in builder, "the page must read the artifacts, not restate them"
+
+
+def test_the_deployed_page_reads_no_artifacts():
+    """And the deployed page must not drift back into rendering them.
+
+    Every artifact read is a file the container has to hold and a number that can go stale
+    against a run nobody re-did. docs/evidence.md and the generated page are where they
+    belong.
+    """
     page = pathlib.Path(evidence.REPO_ROOT / "streamlit_app.py").read_text()
-    assert "engineering_tab" in page
-    assert "build_panels" in page, "the tab must read the artifacts, not restate them"
-    tab = page[page.index("def engineering_tab"):page.index("# ------", page.index("def engineering_tab"))]
-    assert not re.findall(r"(?<![\w.])\d+\.\d+(?![\w.])", tab), (
-        "the tab body carries a number of its own; it must render only what it read"
-    )
+    assert "build_panels" not in page and "engineering_tab" not in page
 
 
 def test_panel_is_immutable():

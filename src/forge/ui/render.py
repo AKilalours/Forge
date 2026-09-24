@@ -33,7 +33,7 @@ def esc(value) -> str:
 
 def banner(*, available: bool, verdict: str | None, probability: float | None,
            reason: str = "", score_label: str = "AI probability", score_note: str = "",
-           threshold: float | None = None) -> str:
+           threshold: float | None = None, caveat: str = "", soft: bool = False) -> str:
     """The headline. One shape for text and image, as on the FastAPI page.
 
     `threshold` marks the deployed decision boundary on the gauge. It is not decoration: the
@@ -45,6 +45,13 @@ def banner(*, available: bool, verdict: str | None, probability: float | None,
     pct = None if (not available or not has_score) else probability * 100
     cls = "pending" if not available else VERDICT_CLASS.get(verdict or "", "warn")
     mark = "?" if not available else VERDICT_MARK.get(verdict or "", "~")
+    # A NEGATIVE FROM A DETECTOR THAT MISSES HALF ITS TARGETS IS NOT A GREEN TICK. `soft`
+    # downgrades the confident styling for exactly that case; the word is unchanged,
+    # because the word was already right. What was wrong was the page dressing a weak
+    # negative as a clean result, which is how a reader concludes "this image is fine"
+    # from a model whose measured recall is 0.55.
+    if soft and available and verdict == "human":
+        cls, mark = "warn", "~"
     word = "No verdict" if not available else VERDICT_WORD.get(verdict or "", str(verdict).upper())
     gauge = ""
     if pct is not None:
@@ -63,7 +70,8 @@ def banner(*, available: bool, verdict: str | None, probability: float | None,
     return f"""<div class="assess big {cls}">
   <div class="verdictbox">
     <div class="mark">{mark}</div>
-    <div><h2>{esc(word)}</h2><p>{esc(reason)}</p></div>
+    <div><h2>{esc(word)}</h2><p>{esc(reason)}</p>
+      {f'<p class="caveat">{esc(caveat)}</p>' if caveat else ''}</div>
   </div>
   <div class="scorebox">
     <div class="scorelabel">{esc(score_label)}</div>
@@ -240,7 +248,28 @@ def _image_threshold(assessment: dict) -> float | None:
         return None
 
 
-def image_result(payload: dict) -> str:
+def detector_caveat(detector: dict) -> str:
+    """One sentence about what a negative from this detector is worth.
+
+    Built from the payload's measured numbers, never written as a literal, so a
+    re-measured detector changes the page rather than leaving a stale claim behind.
+    """
+    recall = detector.get("recall_at_threshold")
+    if not detector.get("available") or recall is None or recall >= 1.0:
+        return ""
+    sample = detector.get("recall_sample") or {}
+    total = sum(v for v in sample.values() if isinstance(v, int)) or None
+    where = f" on {total} images" if total else ""
+    fitted = ", and that operating point was fitted on the same images" if detector.get(
+        "recall_in_sample") else ""
+    return (
+        f"This detector caught {recall:.0%} of known AI images{where} at its operating "
+        f"point{fitted}. A negative is weak evidence: it misses roughly "
+        f"{1 - recall:.0%} of AI images, and newer generators are not in that sample."
+    )
+
+
+def image_result(payload: dict, compact: bool = False) -> str:
     """The image tab, section for section as the FastAPI page renders it.
 
     Banner, then the three-card grid, then robustness, attribution, pixel statistics and
@@ -254,6 +283,7 @@ def image_result(payload: dict) -> str:
     primary = next((s for s in streams if s["key"] == "visual_model"), None)
     supporting = [s for s in streams if s["key"] != "visual_model"]
 
+    caveat = detector_caveat(payload.get("detector") or {})
     head = banner(
         available=bool(assessment["available"]),
         verdict=assessment.get("verdict"),
@@ -262,6 +292,8 @@ def image_result(payload: dict) -> str:
         score_label="Determination" if assessment.get("confidence") is None else "AI probability",
         score_note=assessment.get("detail", ""),
         threshold=_image_threshold(assessment),
+        caveat=caveat,
+        soft=bool(caveat),
     )
 
     preview = (f'<img class="prev" src="{payload["preview"]}" alt="preview">'
@@ -294,6 +326,17 @@ def image_result(payload: dict) -> str:
                   for r in payload.get("authenticity", []))
         + "</div>"
     )
+
+    if compact:
+        # THE DEPLOYED PAGE SHOWS THE VERDICT AND WHAT IT RESTS ON, AND STOPS. Robustness,
+        # occlusion attribution, pixel statistics and the timing table are diagnostics: a
+        # reader deciding whether to trust one image does not need eleven re-scored
+        # transforms and a 5x5 occlusion grid, and burying the verdict under them makes
+        # the page read as thorough rather than as clear. They remain on the FastAPI
+        # reference page, which is where the diagnostics live.
+        return head + (
+            '<div class="grid">' + image_card + evidence_card + signals_card + "</div>"
+        )
 
     return head + (
         '<div class="grid">'
