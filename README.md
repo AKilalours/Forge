@@ -50,8 +50,8 @@
 <p align="center">
   <a href="images/forge-product-tour.mp4"><img src="images/forge-product-tour.gif" width="100%" alt="Watch the FORGE interface walkthrough: text scoring, image forensics, robustness, and attribution"/></a>
   <br/>
-  <a href="https://akilalours.github.io/Forge/tour/"><b>▶ Explore the interactive five-step tour</b></a>
-  · <a href="images/forge-product-tour.mp4"><b>Open the 14-second walkthrough video</b></a>
+  <a href="https://akilalours.github.io/Forge/tour/"><b>▶ Explore the interactive six-step tour</b></a>
+  · <a href="images/forge-product-tour.mp4"><b>Open the 14-second Text/Image capture</b></a>
 </p>
 
 <sub>Visual walkthrough assembled from real FORGE interface captures. The displayed capture scores are from an earlier checkpoint; current measured results are in the linked evidence page.</sub>
@@ -69,11 +69,11 @@ Click any screen to jump straight to that step in the hosted tour.
   <tr>
     <td align="center" width="33%"><a href="https://akilalours.github.io/Forge/tour/#attribution"><img src="images/image_attribution.png" width="320" alt="Image attribution heatmaps"/></a><br/><b>04 · ATTRIBUTION</b><br/>Explore explanatory heatmaps and pixel diagnostics.</td>
     <td align="center" width="33%"><a href="https://akilalours.github.io/Forge/tour/#evidence"><img src="images/chart_generalisation.svg" width="320" alt="Held-out benchmark comparison"/></a><br/><b>05 · EVIDENCE</b><br/>Trace findings to benchmark artifacts and caveats.</td>
-    <td align="center" width="33%"><a href="https://akilalours.github.io/Forge/tour/"><b>▶ Play all five chapters</b></a><br/>Keyboard arrows, chapter selection, and a video walkthrough.</td>
+    <td align="center" width="33%"><a href="https://akilalours.github.io/Forge/tour/#voice-story"><img src="docs/tour/assets/voice-story-flow.svg" width="320" alt="Illustrated preview of the Voice Story writing flow"/></a><br/><b>06 · VOICE STORY</b><br/>Choose an exact line, add your meaning, and export a keepsake.</td>
   </tr>
 </table>
 
-<sub>These are captured UI screens; their displayed score values may lag current evaluation artifacts. The Streamlit demo exposes Text, Image, and Voice Story. The robustness panel is available through the FastAPI image route; it is not a separate Streamlit tab.</sub>
+<sub>Text and Image are captured UI screens; Voice Story is an illustrated preview linked to the live app. Captured detector scores may lag current evaluation artifacts. The robustness panel is available through the FastAPI image route; it is not a separate Streamlit tab. The 14-second video predates Voice Story and captures Text/Image only.</sub>
 
 ---
 
@@ -173,6 +173,45 @@ Set `PANGRAM_API_KEY` and/or `REDUCTO_API_KEY` in the environment or Streamlit s
 enable those optional provider calls. Without keys, the writing and keepsake flow works
 locally with the fictional sample. The full interaction design and demo script are in
 [docs/hackathon_story.md](docs/hackathon_story.md).
+
+### Measured infrastructure evidence
+
+The data path has also streamed and cleaned **5,638,371 Common Crawl documents** in
+2.05 hours (762 documents/s) with four Spark workers on one laptop. The measured cleaning
+policy retained 96,039 documents (1.70%); 90,948 were written to a reserve pool after
+deduplication. This demonstrates a multi-million-document ingestion pass on one host. It
+does not mean the detector was trained on millions of examples or that this was a
+multi-node cluster run. The [crawl report](reports/experiments/crawl/spark/ab6890f623a36785-p4-s32.json)
+and [evidence record](docs/evidence.md) include the rejected-document breakdown and
+incomplete-segment disclosure.
+
+Forge already has distributed-training microbenchmarks: FSDP on an A100 at 1/2/4 workers
+and FSDP/DeepSpeed on L40S at 1/2 workers. The A100 run reached 254.5 examples/s at four
+workers versus 65.0 at one (98% measured scaling efficiency). These are 12-step
+microbenchmarks with synthetic batches, not end-to-end training over the full data
+pipeline. The [raw reports](reports/experiments/scaling) carry hardware, precision,
+global-batch, and memory details. Existing inference sweeps measure model forward only,
+before tokenization and HTTP overhead; they are not serving SLOs.
+
+The full FastAPI text path has now also been measured locally: 20 requests at each
+concurrency level on macOS arm64, with 0 HTTP errors and valid scored-arm response schemas.
+In the latest run, warm p95 was 370 ms at concurrency 1, 367 ms at 2, and 645 ms at 4;
+the first request took 29.21 s while both models loaded.
+This short probe is a reproducible baseline, not a production SLO. Its
+[artifact](reports/experiments/serving/local_cpu_http.json) records all percentiles and
+conditions; [the evidence record](docs/evidence.md) gives the caveats.
+
+Measure the full HTTP path on a local service with a fixed fictional passage. The harness
+defaults to localhost, records no input text, and requires explicit opt-in for remote hosts:
+
+```bash
+python -m uvicorn api.forge_app:app --host 127.0.0.1 --port 8000
+python scripts/benchmark_serving.py
+```
+
+It reports first-request model-load time, warm p50/p95/p99 latency, throughput, status
+codes, and errors at concurrency 1/2/4. It uses 20–500 requests per point and is a bounded
+capacity probe, not a statistically powered SLO or cost study.
 
 ### Run it
 

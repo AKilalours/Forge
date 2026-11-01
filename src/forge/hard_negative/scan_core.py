@@ -304,11 +304,11 @@ def partition_files(element_iter: Iterable[Any]) -> list[str]:
     for element in element_iter:
         if isinstance(element, str):
             flat.append(element)
-        elif isinstance(element, (list, tuple)):
+        elif isinstance(element, list | tuple):
             for inner in element:
                 if isinstance(inner, str):
                     flat.append(inner)
-                elif isinstance(inner, (list, tuple)):
+                elif isinstance(inner, list | tuple):
                     flat.extend(x for x in inner if isinstance(x, str))
                 else:
                     raise ScanError(f"unexpected partition element {inner!r}")

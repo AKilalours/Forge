@@ -46,10 +46,26 @@ the text transfer. Do not use a private personal document as the competition sam
 | Judge lens | Evidence in the project |
 |---|---|
 | Product and design | One deliberate user journey, no AI-written memories, source quote and page reference, offline narrated artifact, reduced-motion support, keyboard-visible controls |
-| Pangram | Optional live call to the official SDK; available model discovery; bounded window results; no public dashboard link; signal is explicitly not authorship proof |
-| Reducto | Optional live upload and parse; typed block/page references; byte cap; temporary local file cleanup; explicit consent |
+| Pangram | Consent-gated SDK adapter, model discovery, bounded window results, no public dashboard link, and explicit no-authorship-claim wording; live credentials still need a real end-to-end smoke test |
+| Reducto | Consent-gated parser adapter, typed block/page references, byte cap, temporary local file cleanup, and a fake-client test; a real upload/parse smoke test remains to be captured |
 | Nous Research | Versioned Hermes Agent skill at `.hermes/skills/forge-voice-story/SKILL.md`, invoked as `/forge-voice-story` |
-| ML engineering | Controlled synthetic-data comparison, reproducible ingestion, transformer training, multi-GPU framework paths, measured inference experiments, evaluation/release gates, monitoring, and CI |
+| ML engineering | Controlled synthetic-data comparison, reproducible ingestion, transformer training, measured A100/L40S distributed microbenchmarks, model-forward inference experiments, evaluation/release gates, monitoring, and CI |
+
+## Competition timeline and honest disclosure
+
+Forge predates the November 22, 2026 event, and Voice Story was pushed before the event
+date. Do not present the repository or Voice Story as if it was built during the hackathon.
+Before submitting, ask the organizer whether an existing project with a new event-built
+extension is eligible. Identify the pre-existing detector, data, models, and interface;
+then list only the work done during the official event window as hackathon work. Preserve
+the commit history and disclose AI assistance and third-party assets in the submission.
+
+Suggested organizer question (draft only; not sent):
+
+> Is an extension to my existing open-source AI-content detection project eligible if I
+> clearly disclose the pre-existing detector, training data, and app, and build a distinct
+> human-centered Voice Story experience during the event? I would use the event APIs only
+> with explicit consent and label every pre-event asset.
 
 ## Pangram ML Engineer conversation
 
@@ -62,9 +78,15 @@ support:
 - **Training and infrastructure:** `src/forge/training/` contains the fit loop, profiling,
   Ray/DeepSpeed paths, and checkpoint selection. Reports distinguish local experiments
   from cluster-scale operation.
+- **Distributed benchmark:** `reports/experiments/scaling/` contains real A100 and L40S
+  worker-count measurements. They are short synthetic-batch microbenchmarks; they do not
+  represent data-loader throughput or a full distributed training run over the mined corpus.
 - **Inference and trust:** `src/forge/inference/` owns windowing, thresholds, and response
   contracts. The image path refuses unsupported or oversized input and labels an untrained
   baseline honestly.
+- **Serving measurement:** `scripts/benchmark_serving.py` measures first-request cost and
+  HTTP p50/p95/p99 under bounded concurrency. Run it on a local or approved staging service
+  before making a production SLO claim.
 - **Research:** `docs/evaluation.md` and `reports/experiments/` show the measured result,
   its conditions, the OOD failures, and adversarial gaps.
 

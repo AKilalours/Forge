@@ -285,6 +285,29 @@ well under 10x, and they were measured for different reasons on different code.
 **Scope.** This times the model forward over pre-tokenised windows. Tokenisation,
 windowing and HTTP are not included, so a real request costs this plus those.
 
+#### The full text API, measured over HTTP on the local Mac
+
+The forward-only sweep above does not include request parsing, tokenization, windowing,
+serialization, or startup. `scripts/benchmark_serving.py` now measures the reference
+FastAPI endpoint end to end with a fixed fictional passage. The run below is 20 requests at
+each concurrency point on a local macOS 27.2 arm64 machine; the first request loaded both
+model arms lazily.
+
+| Concurrent requests | Requests/s | p50 | p95 | p99 | HTTP/errors |
+|---:|---:|---:|---:|---:|---|
+| 1 | 3.57 | 254 ms | 370 ms | 544 ms | 20×200 / 0 |
+| 2 | 5.93 | 335 ms | 367 ms | 399 ms | 20×200 / 0 |
+| 4 | 7.08 | 577 ms | 645 ms | 651 ms | 20×200 / 0 |
+
+Cold first request: **29.21 s**, including lazy model loading. The latest harness validates
+that each successful response is JSON with the expected schema and at least one scored
+model arm; the complete report is
+[`local_cpu_http.json`](../reports/experiments/serving/local_cpu_http.json). This is a
+short, single-host capacity probe with 20 observations per concurrency level. The p99 is
+the largest observed sample at this size; it is not a production SLO, a multi-host capacity
+test, or a cost measurement. It does verify that both loaded detector arms served real
+HTTP requests successfully on this machine.
+
 
 ### Ray Train, and what a single machine can honestly prove about it
 

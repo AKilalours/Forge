@@ -171,6 +171,7 @@ dev = [
   # originally resolved to. Bump this on purpose, and fix what the bump finds.
   "ruff>=0.16,<0.17",
   "mypy>=1.9",
+  "types-PyYAML>=6.0",
   "pre-commit>=3.7",
 ]
 

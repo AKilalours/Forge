@@ -62,7 +62,7 @@ def _assert_no_pixels(record: ImageRecord) -> None:
     and quietly turning a metadata file into redistribution.
     """
     for key, value in asdict(record).items():
-        if isinstance(value, (bytes, bytearray)):
+        if isinstance(value, bytes | bytearray):
             raise ValueError(f"field {key!r} carries raw bytes; manifests never do")
         if isinstance(value, str) and len(value) > 4096:
             raise ValueError(

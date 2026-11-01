@@ -21,7 +21,7 @@ def evaluate(metrics: dict, gate: dict, baseline: dict | None = None) -> GateRes
     failures: list[str] = []
 
     def _number(value: object, label: str) -> float | None:
-        if isinstance(value, bool) or not isinstance(value, (int, float)):
+        if isinstance(value, bool) or not isinstance(value, int | float):
             failures.append(f"{label} must be numeric")
             return None
         result = float(value)

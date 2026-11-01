@@ -45,6 +45,7 @@ def _open(raw: bytes):
 
     with Image.open(io.BytesIO(raw)) as img:
         oriented = ImageOps.exif_transpose(img)
+        assert oriented is not None
         return oriented.convert("RGB")
 
 

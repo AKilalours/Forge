@@ -207,9 +207,16 @@ def test_a_phone_photograph_in_an_mpo_container_is_analysed_not_rejected():
 
 def test_a_multi_frame_container_says_only_the_first_frame_was_analysed():
     """A signal measured on frame 0 is not a statement about frames 1..n."""
+    buffer = io.BytesIO()
+    first = Image.new("RGB", (96, 72), (120, 90, 60))
+    extra = [Image.new("RGB", (96, 72), (60, 90, 120)) for _ in range(2)]
+    # Pillow's MPO writer in some supported environments emits an invalid MP Index.
+    # TIFF exercises the same first-frame-only contract using a valid multi-frame file.
+    first.save(buffer, format="TIFF", save_all=True, append_images=extra)
+
     from forge.image.forensics import real_format
 
-    finding = real_format(_mpo(frames=3))
+    finding = real_format(buffer.getvalue())
     assert finding.detail["frames"] == 3
     assert "only the first is analysed" in finding.caveat
 

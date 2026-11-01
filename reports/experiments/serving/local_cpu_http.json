@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "measured_at": "2026-11-01T16:48:22.819560+00:00",
+  "target_origin": "http://127.0.0.1:8765",
+  "endpoint": "/v1/text/analyze",
+  "client": {
+    "python": "3.12.12",
+    "platform": "macOS-27.2-arm64-arm-64bit"
+  },
+  "workload": {
+    "kind": "fixed fictional text; never stored in this artifact",
+    "characters": 209,
+    "concurrency_levels": [
+      1,
+      2,
+      4
+    ],
+    "samples_per_level": 20,
+    "timeout_seconds": 60.0
+  },
+  "first_request": {
+    "latency_ms": 29211.72,
+    "http_status": 200,
+    "error": null,
+    "note": "Includes any lazy model loading triggered by the first text request."
+  },
+  "levels": [
+    {
+      "concurrency": 1,
+      "requests": 20,
+      "wall_seconds": 5.5973,
+      "requests_per_second": 3.573,
+      "latency_ms": {
+        "p50": 253.87,
+        "p95": 369.65,
+        "p99": 544.3,
+        "min": 203.13,
+        "max": 544.3
+      },
+      "http_statuses": {
+        "200": 20
+      },
+      "errors": {},
+      "warmup_errors": 0
+    },
+    {
+      "concurrency": 2,
+      "requests": 20,
+      "wall_seconds": 3.3711,
+      "requests_per_second": 5.933,
+      "latency_ms": {
+        "p50": 335.17,
+        "p95": 366.79,
+        "p99": 399.47,
+        "min": 304.09,
+        "max": 399.47
+      },
+      "http_statuses": {
+        "200": 20
+      },
+      "errors": {},
+      "warmup_errors": 0
+    },
+    {
+      "concurrency": 4,
+      "requests": 20,
+      "wall_seconds": 2.8263,
+      "requests_per_second": 7.076,
+      "latency_ms": {
+        "p50": 576.96,
+        "p95": 645.37,
+        "p99": 651.39,
+        "min": 467.53,
+        "max": 651.39
+      },
+      "http_statuses": {
+        "200": 20
+      },
+      "errors": {},
+      "warmup_errors": 0
+    }
+  ],
+  "scope": "End-to-end HTTP response time from this client to the configured service. This is not a multi-host capacity test, a statistically powered SLO study, or a price measurement. Report target hardware and deployment separately."
+}

@@ -93,6 +93,7 @@ def normalize_bytes(
 
     with Image.open(io.BytesIO(raw)) as img:
         oriented = ImageOps.exif_transpose(img)  # 1
+        assert oriented is not None
         rgb = oriented.convert("RGB")            # 2
 
         short_side = min(rgb.size)

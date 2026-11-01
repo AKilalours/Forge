@@ -275,8 +275,12 @@ them differing in length distribution as well as in matching, and a detector can
 length. Both arms are therefore capped with `cap_documents_matching`, which selects the
 control arm's documents so its length profile tracks the mirror arm's.
 
-Fix for the next run, not applied here: set `max_new_tokens` per document from its target
-rather than globally. Applying it now would mean regenerating both arms.
+The generation code now sets `max_new_tokens` per document from its target
+(`src/forge/generation/assignment.py`, introduced in commit `c691489`). This change does not
+alter the historical v0.1-min artifacts above: they were produced before the fix and both
+arms must be regenerated under the same protocol before claiming an effect on acceptance,
+length leakage, or held-out accuracy. The current code is a corrective implementation;
+there is not yet a new matched A/B training result for it.
 
 **Selection pressure from rejection.** First-pass rejection on the mirror arm ran near 40%
 for the first generator family. Documents are retried up to twice with different seeds, so
@@ -284,9 +288,15 @@ final acceptance is higher, but the accepted set is selected rather than sampled
 over-represents source documents whose mirrors happened to land in the accepted length
 band. The per-reason breakdown is recorded in `reports/experiments/`.
 
-**Single GPU.** One RTX 4090. The FSDP and DeepSpeed paths exist and are tested but were
-not exercised for these runs, so no multi-GPU scaling claim is made.
+**Single GPU for the v0.1-min training runs.** Arms A and B below were trained on one RTX
+4090. The FSDP and DeepSpeed paths were not used for those dataset-backed runs. Separate,
+later distributed-training microbenchmarks are recorded under
+`reports/experiments/scaling/`: FSDP at 1/2/4 workers on an A100, and FSDP/DeepSpeed at
+1/2 workers on L40S. Those short runs use synthetic input batches; they establish that the
+distributed step path ran and measured throughput on those devices, not end-to-end data
+pipeline throughput or full-corpus distributed training.
 
-**Not measured here.** Arms C and D, external benchmarks (RAID, MAGE, HC3), the adversarial
-suite, and calibration under distribution shift. Those are Tier 2 and their rows stay empty
-until they are run.
+**Not measured in the v0.1-min A/B training comparison.** Arms C and D, the adversarial
+suite, and calibration under distribution shift. The separate held-out scoring evaluation
+above does include HC3, MAGE, and RAID; do not read the training-run scope here as saying
+those benchmark evaluations were never run.

@@ -189,7 +189,9 @@ def test_parts_accumulate_instead_of_overwriting_each_other(tmp_path):
         assert f"part-{fam}" in named, f"{fam}'s part is not on disk"
 
     import pyarrow.parquet as pq
-    rows = sum(pq.read_table(f).num_rows for f in on_disk)
+    # Read each physical parquet file directly. ``read_table`` discovers the Hive
+    # ``split=...`` directory and conflicts with the physical ``split`` column.
+    rows = sum(pq.ParquetFile(f).metadata.num_rows for f in on_disk)
     assert rows == total, "a later family overwrote an earlier one"
 
 
