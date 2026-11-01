@@ -31,7 +31,8 @@ _EPS = 1e-6
 
 def _hist(x, bins: int, lo: float, hi: float) -> np.ndarray:
     counts, _ = np.histogram(np.asarray(x, float), bins=np.linspace(lo, hi, bins + 1))
-    p = counts / max(counts.sum(), 1)
+    total = int(counts.sum())
+    p = counts / total if total else np.zeros_like(counts, dtype=float)
     return np.clip(p, _EPS, None)
 
 
