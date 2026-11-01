@@ -22,6 +22,7 @@
 
 <p align="center">
   <a href="https://akilalours.github.io/Forge/"><b>Interactive evidence ↗</b></a> ·
+  <a href="https://akilalours.github.io/Forge/tour/"><b>Guided app tour ↗</b></a> ·
   <a href="docs/evidence.md"><b>Current evidence</b></a> ·
   <a href="docs/evaluation.md"><b>Historical evaluation</b></a> ·
 </p>
@@ -43,6 +44,17 @@
 <br/>
 
 </div>
+
+---
+
+<p align="center">
+  <a href="images/forge-product-tour.mp4"><img src="images/forge-product-tour.gif" width="100%" alt="Watch the FORGE interface walkthrough: text scoring, image forensics, robustness, and attribution"/></a>
+  <br/>
+  <a href="https://akilalours.github.io/Forge/tour/"><b>▶ Explore the interactive five-step tour</b></a>
+  · <a href="images/forge-product-tour.mp4"><b>Open the 14-second walkthrough video</b></a>
+</p>
+
+<sub>Visual walkthrough assembled from real FORGE interface captures. The displayed capture scores are from an earlier checkpoint; current measured results are in the linked evidence page.</sub>
 
 ---
 
