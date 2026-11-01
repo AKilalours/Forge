@@ -9,8 +9,8 @@ they are not replaced with mocks or estimated results.
 
 | Area | Verified today | Scope boundary |
 |---|---|---|
-| Provider adapters | Pangram and Reducto adapters, explicit-consent UI, fake-client tests | No live calls have been captured; local credentials are absent and the hosted Pangram status is disconnected |
-| Hermes | Versioned skill at `.hermes/skills/forge-voice-story/SKILL.md` | Hermes CLI is not installed; no real Hermes session has been recorded |
+| Provider adapters | Pangram and Reducto adapters, explicit-consent UI, fake-client tests; a consented fictional-data smoke is recorded in `reports/experiments/providers/live-smoke-20261101T223239Z.json` | Reducto parsed one page in 3,167.84 ms; Pangram returned `ProviderError`. The report contains no content or secrets; hosted Pangram remains disconnected |
+| Hermes | Versioned skill installed into Hermes Agent v0.22.5; a local Ollama-backed session was attempted | The local model did not return a completed response; skill behavior is not yet demonstrated. Details: [`hermes_local_smoke.md`](hermes_local_smoke.md) |
 | Demo media | 14-second Text/Image capture; six-step tour links to the live Voice Story flow | Video predates Voice Story; the Voice Story tour art is an illustration |
 | Event eligibility | Existing project and pre-event Voice Story dates documented; organizer question drafted in `docs/hackathon_story.md` | No organizer response has been received |
 | Data scale | 5,638,371 Common Crawl documents streamed/cleaned on one laptop; 90,948 entered the reserve pool | One host, 4 Spark workers, 270/284 segments; not model training at that scale |
@@ -44,18 +44,19 @@ redacted, reproducible evidence is committed. A fake-client test is not an exit 
 
 ### 2. Demonstrate the Hermes skill in a real session
 
-**Status:** skill is checked in; Hermes runtime is absent in the current environment.
+**Status:** Hermes Agent v0.22.5 is installed and the Forge skill is registered. A local-only
+Ollama session was attempted, but no completed assistant response was produced, so this gate
+remains open.
 
-1. Install/configure Hermes using the
-   [official installation guide](https://hermes-agent.nousresearch.com/docs/getting-started/installation)
-   on the demo machine.
-2. Copy the checked-in skill folder into Hermes' `~/.hermes/skills/` directory (the
-   [official skills guide](https://hermes-agent.nousresearch.com/docs/guides/work-with-skills)
-   documents the location), open a new session, and invoke `/forge-voice-story` with the
-   fictional passage.
+1. Use a supported local 64K model configuration or a no-cost authorized provider; do not
+   make paid API calls just to close this demo gate.
+2. Open a fresh Hermes session, invoke `/forge-voice-story`, and use only Forge's fictional
+   passage with external providers disabled.
 3. Confirm it asks one question at a time, preserves the chosen excerpt, invents no
    personal detail, and asks before external transfer or assembly.
-4. Capture a short redacted transcript or session recording. Label the runtime/version.
+4. Capture a short redacted transcript or session recording. Label the runtime/version and
+   model. Record any local runtime limitations rather than presenting a failed attempt as a
+   completed demonstration.
 
 **Exit:** one real session is reproducible, the skill is loaded by Hermes, and the output
 passes the author-control checks in the skill itself.

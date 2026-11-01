@@ -23,7 +23,10 @@ behind the words without turning a score into an accusation.
    claim authorship from a detector. Install Hermes with its
    [official guide](https://hermes-agent.nousresearch.com/docs/getting-started/installation),
    copy the skill into `~/.hermes/skills/forge-voice-story/`, then invoke
-   `/forge-voice-story` in a new Hermes session.
+   `/forge-voice-story` in a new Hermes session. Hermes Agent v0.22.5 is now installed on
+   the demo Mac and the skill is registered, but a local Ollama run did not produce a
+   completed response; the skill has not yet passed a live-session demonstration. See the
+   [smoke-test note](hermes_local_smoke.md).
 
 Forge's matched-mirror arm can also be run locally in the same tab. All external calls are
 opt-in. The keepsake is rendered and downloaded in the browser; Forge has no storage route
@@ -48,6 +51,12 @@ and run `python scripts/smoke_providers.py --provider both --confirm-external`; 
 passage and generated fictional PDF. The script records sanitized metadata. See the
 [provider and evidence closure gates](roadmap.md#closure-gates).
 
+A consented fictional-only smoke was already run on November 1, 2026: Reducto extracted one
+page in 3,167.84 ms, while Pangram returned `ProviderError`. The sanitized result is in
+[`reports/experiments/providers/live-smoke-20261101T223239Z.json`](../reports/experiments/providers/live-smoke-20261101T223239Z.json).
+Treat Reducto as a successful API smoke only; the Pangram integration still needs a fix and
+retest.
+
 ## What the judges can verify
 
 The current status and evidence needed to close the live-provider, Hermes, video,
@@ -58,9 +67,9 @@ not claims that external credentials, event approval, or GPU runs are already av
 | Judge lens | Evidence in the project |
 |---|---|
 | Product and design | One deliberate user journey, no AI-written memories, source quote and page reference, offline narrated artifact, reduced-motion support, keyboard-visible controls |
-| Pangram | Consent-gated SDK adapter, model discovery, bounded window results, no public dashboard link, and explicit no-authorship-claim wording; live credentials still need a real end-to-end smoke test |
-| Reducto | Consent-gated parser adapter, typed block/page references, byte cap, temporary local file cleanup, and a fake-client test; a real upload/parse smoke test remains to be captured |
-| Nous Research | Versioned Hermes Agent skill at `.hermes/skills/forge-voice-story/SKILL.md`, invoked as `/forge-voice-story` |
+| Pangram | Consent-gated SDK adapter, model discovery, bounded window results, no public dashboard link, and explicit no-authorship-claim wording; the fictional live smoke returned `ProviderError` |
+| Reducto | Consent-gated parser adapter, typed block/page references, byte cap, temporary local file cleanup, fake-client coverage, and a successful one-page fictional PDF smoke |
+| Nous Research | Versioned skill is installed in Hermes Agent v0.22.5; local run attempted, but no completed skill response has been verified yet |
 | ML engineering | Controlled synthetic-data comparison, reproducible ingestion, transformer training, measured A100/L40S distributed microbenchmarks, model-forward inference experiments, evaluation/release gates, monitoring, and CI |
 
 ## Competition timeline and honest disclosure

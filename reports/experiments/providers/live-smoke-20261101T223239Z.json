@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "measured_at": "2026-11-01T22:32:39.520034+00:00",
+  "workload": "fixed fictional passage and generated one-page fictional PDF",
+  "content_saved": false,
+  "secrets_saved": false,
+  "providers": {
+    "pangram": {
+      "status": "failure",
+      "error_type": "ProviderError"
+    },
+    "reducto": {
+      "status": "success",
+      "latency_ms": 3167.84,
+      "pages": 1,
+      "chunk_count": 1,
+      "text_extracted": true
+    }
+  }
+}

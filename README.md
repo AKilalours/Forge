@@ -163,7 +163,10 @@ source excerpts, and asks the writer to explain what the detail means to them. I
 self-contained narrated keepsake using only their chosen words and answers. Pangram
 segment signals and Reducto PDF/DOCX parsing are optional, require a separate consent action,
 and never become an authorship verdict. A matching [Hermes reflection skill](.hermes/skills/forge-voice-story/SKILL.md)
-helps guide the same one-question-at-a-time conversation.
+is included for a one-question-at-a-time conversation. Hermes Agent v0.22.5 and the skill
+were installed locally, but the local-model session did not produce a completed response;
+the skill has not yet been demonstrated end to end. See the
+[Hermes smoke-test note](docs/hermes_local_smoke.md).
 
 ```bash
 pip install -e ".[demo,serve,hackathon]"
@@ -179,7 +182,9 @@ For an explicitly approved live integration check, set the keys privately in you
 environment, then run `python scripts/smoke_providers.py --provider both --confirm-external`
 and type `SEND FICTIONAL SAMPLE`. It submits only the built-in fictional passage and a
 generated fictional one-page PDF, and writes redacted metadata without storing content or
-keys. This harness is not evidence of a live test until run with real credentials.
+keys. The November 1 fictional-data smoke is recorded in
+[`reports/experiments/providers/`](reports/experiments/providers/): Reducto successfully
+parsed one page; Pangram returned a provider error.
 
 ### Measured infrastructure evidence
 
