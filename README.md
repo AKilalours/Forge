@@ -56,6 +56,25 @@
 
 <sub>Visual walkthrough assembled from real FORGE interface captures. The displayed capture scores are from an earlier checkpoint; current measured results are in the linked evidence page.</sub>
 
+### The tour, chapter by chapter
+
+Click any screen to jump straight to that step in the hosted tour.
+
+<table>
+  <tr>
+    <td align="center" width="33%"><a href="https://akilalours.github.io/Forge/tour/#text"><img src="images/text_verdict.png" width="320" alt="Text analysis results screen"/></a><br/><b>01 · TEXT</b><br/>Score a passage and compare detector arms.</td>
+    <td align="center" width="33%"><a href="https://akilalours.github.io/Forge/tour/#image"><img src="images/image_verdict.png" width="320" alt="Image analysis with evidence and metadata"/></a><br/><b>02 · IMAGE</b><br/>Review a score beside file and provenance evidence.</td>
+    <td align="center" width="33%"><a href="https://akilalours.github.io/Forge/tour/#robustness"><img src="images/image_robustness.png" width="320" alt="Image robustness checks"/></a><br/><b>03 · ROBUSTNESS</b><br/>Inspect scores under controlled image edits.</td>
+  </tr>
+  <tr>
+    <td align="center" width="33%"><a href="https://akilalours.github.io/Forge/tour/#attribution"><img src="images/image_attribution.png" width="320" alt="Image attribution heatmaps"/></a><br/><b>04 · ATTRIBUTION</b><br/>Explore explanatory heatmaps and pixel diagnostics.</td>
+    <td align="center" width="33%"><a href="https://akilalours.github.io/Forge/tour/#evidence"><img src="images/chart_generalisation.svg" width="320" alt="Held-out benchmark comparison"/></a><br/><b>05 · EVIDENCE</b><br/>Trace findings to benchmark artifacts and caveats.</td>
+    <td align="center" width="33%"><a href="https://akilalours.github.io/Forge/tour/"><b>▶ Play all five chapters</b></a><br/>Keyboard arrows, chapter selection, and a video walkthrough.</td>
+  </tr>
+</table>
+
+<sub>These are captured UI screens; their displayed score values may lag current evaluation artifacts. The Streamlit demo exposes Text and Image tabs. The robustness panel is available through the FastAPI image route; it is not a separate Streamlit tab.</sub>
+
 ---
 
 **Does synthetic training text that mirrors real human documents beat synthetic text from

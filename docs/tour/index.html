@@ -81,13 +81,15 @@
     const $=id=>document.getElementById(id);
     const frame=$("screen"), shot=$("shot"), title=$("title"), copy=$("copy"), badge=$("badge"), counter=$("counter"), shotTitle=$("shotTitle"), shotMeta=$("shotMeta"), progress=$("progress"), play=$("play"), announce=$("announce");
     const nav=$("chapters");
-    chapters.forEach((item,i)=>{const b=document.createElement("button");b.type="button";b.className="chapter";b.innerHTML=`<small>0${i+1}</small><span>${item.name}</span>`;b.addEventListener("click",()=>{stop();show(i)});nav.appendChild(b)});
+    chapters.forEach((item,i)=>{const b=document.createElement("button");b.type="button";b.className="chapter";b.id=`chapter-${item.tag.toLowerCase()}`;b.innerHTML=`<small>0${i+1}</small><span>${item.name}</span>`;b.addEventListener("click",()=>{stop();show(i);history.replaceState(null,"",`#${item.tag.toLowerCase()}`)});nav.appendChild(b)});
     function show(i){current=(i+chapters.length)%chapters.length;const c=chapters[current];frame.classList.add("loading");title.textContent=c.title;copy.textContent=c.copy;badge.textContent=`0${current+1} / ${c.tag}`;counter.textContent=`Chapter 0${current+1} · 0${chapters.length}`;shotTitle.textContent=c.shotTitle;shotMeta.textContent=c.meta;progress.style.width=`${((current+1)/chapters.length)*100}%`;[...nav.children].forEach((b,n)=>b.setAttribute("aria-current",n===current?"step":"false"));announce.textContent=`Chapter ${current+1}: ${c.title}`;shot.style.objectFit="contain";shot.src=c.shot;shot.alt=c.alt;shot.onload=()=>frame.classList.remove("loading")}
     function stop(){if(timer){clearInterval(timer);timer=null}play.textContent="▶ Play tour";play.setAttribute("aria-pressed","false")}
-    $("prev").addEventListener("click",()=>{stop();show(current-1)});$("next").addEventListener("click",()=>{stop();show(current+1)});
+    function navigate(i){stop();show(i);history.replaceState(null,"",`#${chapters[current].tag.toLowerCase()}`)}
+    $("prev").addEventListener("click",()=>navigate(current-1));$("next").addEventListener("click",()=>navigate(current+1));
     play.addEventListener("click",()=>{if(timer){stop();return}play.textContent="Ⅱ Pause tour";play.setAttribute("aria-pressed","true");timer=setInterval(()=>{if(current===chapters.length-1){stop();return}show(current+1)},5200)});
-    document.addEventListener("keydown",e=>{if(e.target instanceof HTMLButtonElement)return;if(e.key==="ArrowRight"){stop();show(current+1)}if(e.key==="ArrowLeft"){stop();show(current-1)}if(e.key===" "){e.preventDefault();play.click()}});
-    show(0);
+    document.addEventListener("keydown",e=>{if(e.target instanceof HTMLButtonElement)return;if(e.key==="ArrowRight"){navigate(current+1)}if(e.key==="ArrowLeft"){navigate(current-1)}if(e.key===" "){e.preventDefault();play.click()}});
+    const startAt=chapters.findIndex(c=>c.tag.toLowerCase()===location.hash.slice(1).toLowerCase());
+    show(startAt<0?0:startAt);
   </script>
 </body>
 </html>
