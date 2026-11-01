@@ -482,7 +482,8 @@ def gate(
         )
     report = json.loads(Path(eval_report).read_text())
     metrics = report.get("headline") or report
-    result = evaluate(metrics, gate_cfg)
+    baseline = report.get("baseline") or report.get("baseline_metrics")
+    result = evaluate(metrics, gate_cfg, baseline=baseline)
     if result.passed:
         typer.secho(f"GATE PASSED: {model_version} may be promoted to canary", fg=typer.colors.GREEN)
         return

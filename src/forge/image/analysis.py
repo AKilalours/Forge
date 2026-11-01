@@ -63,11 +63,15 @@ def analyse(data: bytes, filename: str = "upload", with_stability: bool = False,
 
     # Compressed uploads can expand to enormous pixel buffers. Reject them before the
     # preview, forensic passes, or detector decode the image into memory.
-    try:
-        from PIL import Image
+    from PIL import Image
 
+    try:
         with Image.open(io.BytesIO(data)) as source:
             width, height = source.size
+    except Image.DecompressionBombError as error:
+        raise UnsupportedImage(
+            f"image dimensions exceed Pillow's safe decoding limit: {error}"
+        ) from error
     except Exception:
         width = height = 0  # the report below provides the format-specific refusal
     if width * height > MAX_IMAGE_PIXELS:

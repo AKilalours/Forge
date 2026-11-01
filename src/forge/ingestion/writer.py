@@ -14,6 +14,7 @@ Two rules enforced here rather than left to discipline:
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from collections import Counter
 from datetime import datetime, timezone
@@ -28,6 +29,8 @@ from forge.common.splits import SPLIT_SALT
 
 # Read the data lake with this, never with a bare **/*.parquet.
 PARTITION_GLOB = "source=*/split=*/*.parquet"
+_SAFE_SOURCE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+_SAFE_PART = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
 def _code_commit() -> str:
@@ -61,6 +64,11 @@ def write_parquet(
     root = Path(root)
     written: dict[str, int] = {}
     groups: dict[tuple[str, str], list[dict]] = {}
+    for doc in docs:
+        if not _SAFE_SOURCE.fullmatch(doc.source) or doc.source in {".", ".."}:
+            raise ValueError(f"unsafe source partition name: {doc.source!r}")
+    if not _SAFE_PART.fullmatch(part) or part in {".", ".."}:
+        raise ValueError(f"unsafe parquet part name: {part!r}")
     for doc in docs:
         groups.setdefault((doc.source, doc.split.value), []).append(_row(doc))
     for (source, split), rows in groups.items():

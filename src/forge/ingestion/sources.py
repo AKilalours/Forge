@@ -42,6 +42,11 @@ class Source(Protocol):
     def stream(self, limit: int | None = None) -> Iterator[RawRecord]: ...
 
 
+def _validate_limit(limit: int | None) -> None:
+    if limit is not None and limit < 0:
+        raise ValueError("limit must be non-negative or None")
+
+
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -69,6 +74,9 @@ class _HFStreamingSource:
         return True
 
     def stream(self, limit: int | None = None) -> Iterator[RawRecord]:
+        _validate_limit(limit)
+        if limit == 0:
+            return
         try:
             from datasets import load_dataset
         except ImportError as e:  # pragma: no cover
@@ -126,6 +134,9 @@ class GutenbergSource:
         self.root = Path(root)
 
     def stream(self, limit: int | None = None) -> Iterator[RawRecord]:
+        _validate_limit(limit)
+        if limit == 0:
+            return
         acquired = _now()
         n = 0
         for p in sorted(self.root.rglob("*.txt")):
@@ -171,6 +182,9 @@ class GovInfoSource:
         self.root = Path(root)
 
     def stream(self, limit: int | None = None) -> Iterator[RawRecord]:
+        _validate_limit(limit)
+        if limit == 0:
+            return
         acquired = _now()
         n = 0
         for p in sorted(self.root.rglob("*.txt")):
@@ -211,6 +225,7 @@ class LocalJSONLSource:
         self.register = register
 
     def stream(self, limit: int | None = None) -> Iterator[RawRecord]:
+        _validate_limit(limit)
         acquired = _now()
         with self.path.open() as fh:
             for n, line in enumerate(fh):

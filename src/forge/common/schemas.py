@@ -69,6 +69,10 @@ class HumanDocument(BaseModel):
     def _sha_shape(cls, v: str) -> str:
         if len(v) != 64:
             raise ValueError("content_sha256 must be a 64-char hex digest")
+        try:
+            bytes.fromhex(v)
+        except ValueError as error:
+            raise ValueError("content_sha256 must be a 64-char hex digest") from error
         return v
 
 

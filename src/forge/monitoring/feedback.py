@@ -75,6 +75,8 @@ class FeedbackItem:
                     "verifying requires both a verifier and a label THEY supplied. The "
                     "user's claim is not a label; it is the thing being checked."
                 )
+            if verified_label not in {"human", "ai"}:
+                raise UnverifiedLabel("verified_label must be one of: human, ai")
             self.verified_label = verified_label
             self.verifier = verifier
         self.history.append((self.state.value, to.value))
@@ -86,6 +88,10 @@ class FeedbackQueue:
         self._items: dict[str, FeedbackItem] = {}
 
     def submit(self, item: FeedbackItem) -> None:
+        if not item.item_id:
+            raise ValueError("feedback item_id must not be empty")
+        if item.item_id in self._items:
+            raise ValueError(f"feedback item already exists: {item.item_id}")
         self._items[item.item_id] = item
 
     def get(self, item_id: str) -> FeedbackItem:

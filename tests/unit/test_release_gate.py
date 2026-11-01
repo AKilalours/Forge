@@ -19,8 +19,16 @@ def test_accuracy_alone_does_not_ship_a_model():
 
 
 def test_clean_candidate_passes():
-    metrics = {"fpr": 0.0005, "fnr": 0.05, "ood_auroc": 0.95, "ece": 0.02, "p95_latency_ms": 40}
-    assert evaluate(metrics, GATE).passed
+    metrics = {"fpr": 0.0005, "fnr": 0.05, "ood_auroc": 0.95, "ece": 0.02,
+               "p95_latency_ms": 40, "R1_iid": 0.95}
+    assert evaluate(metrics, GATE, baseline={"R1_iid": 0.94}).passed
+
+
+def test_missing_metrics_and_baseline_fail_closed():
+    result = evaluate({}, GATE)
+    assert not result.passed
+    assert any("missing required metric" in failure for failure in result.failures)
+    assert any("missing baseline metric" in failure for failure in result.failures)
 
 
 def test_regression_blocks_release():

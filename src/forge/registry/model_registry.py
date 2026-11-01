@@ -79,6 +79,8 @@ class Registry:
                 "be reproduced or audited."
             )
         e = ModelEntry(**{k: entry[k] for k in REQUIRED_FIELDS})
+        if not e.version or e.version in self._entries:
+            raise ValueError(f"model version must be non-empty and unique: {e.version!r}")
         self._entries[e.version] = e
         return e
 
@@ -98,6 +100,16 @@ class Registry:
 
     def promote(self, version: str, to: Stage) -> ModelEntry:
         e = self._entries[version]
+        if to is Stage.CANARY and e.stage is not Stage.REGISTERED:
+            raise PromotionRefused(
+                f"{version} is {e.stage.value}; only a registered candidate can enter canary"
+            )
+        if to is Stage.PRODUCTION and e.stage is not Stage.CANARY:
+            raise PromotionRefused(
+                f"{version} is {e.stage.value}; production promotion goes through canary"
+            )
+        if to not in (Stage.CANARY, Stage.PRODUCTION):
+            raise PromotionRefused(f"{to.value} is not a promotable target stage")
         if to in (Stage.CANARY, Stage.PRODUCTION):
             if e.gate is None:
                 raise PromotionRefused(
@@ -108,11 +120,6 @@ class Registry:
                 raise PromotionRefused(
                     f"{version} failed the release gate: {e.gate['failures']}"
                 )
-        if to is Stage.PRODUCTION and e.stage is not Stage.CANARY:
-            raise PromotionRefused(
-                f"{version} is {e.stage.value}; production promotion goes through canary "
-                "so a regression the gate did not model is caught on real traffic first."
-            )
         if to is Stage.PRODUCTION:
             current = self.production()
             if current is not None and current.version != version:
@@ -132,6 +139,13 @@ class Registry:
         whole value of a rollback is that it is fast.
         """
         e = self._entries[to_version]
+        if e.stage is not Stage.ARCHIVED or not any(
+            event.get("event") == "promote" and event.get("to") == Stage.PRODUCTION.value
+            for event in e.history
+        ):
+            raise PromotionRefused(
+                f"{to_version} was not a previously served, archived production version"
+            )
         current = self.production()
         if current is not None and current.version != to_version:
             current.stage = Stage.ARCHIVED
@@ -145,7 +159,8 @@ class Registry:
         if not self.path:
             return None
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(
-            json.dumps({v: e.as_dict() for v, e in self._entries.items()}, indent=2) + "\n"
-        )
+        payload = json.dumps({v: e.as_dict() for v, e in self._entries.items()}, indent=2) + "\n"
+        temporary = self.path.with_suffix(self.path.suffix + ".tmp")
+        temporary.write_text(payload)
+        temporary.replace(self.path)
         return self.path
