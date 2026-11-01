@@ -20,8 +20,10 @@ behind the words without turning a score into an accusation.
    wrote the passage.
 3. **Hermes, as the reflection companion:** the checked-in `forge-voice-story` skill asks
    one question at a time, protects the author's wording, and refuses to invent memories or
-   claim authorship from a detector. Copy it into `~/.hermes/skills/forge-voice-story/`,
-   then invoke `/forge-voice-story` in Hermes.
+   claim authorship from a detector. Install Hermes with its
+   [official guide](https://hermes-agent.nousresearch.com/docs/getting-started/installation),
+   copy the skill into `~/.hermes/skills/forge-voice-story/`, then invoke
+   `/forge-voice-story` in a new Hermes session.
 
 Forge's matched-mirror arm can also be run locally in the same tab. All external calls are
 opt-in. The keepsake is rendered and downloaded in the browser; Forge has no storage route
@@ -42,6 +44,11 @@ For a live Pangram demo, set `PANGRAM_API_KEY` in Streamlit secrets and explicit
 the text transfer. Do not use a private personal document as the competition sample.
 
 ## What the judges can verify
+
+The current status and evidence needed to close the live-provider, Hermes, video,
+eligibility, training-scale, generalization, and production-serving gaps are tracked in the
+[evidence-backed readiness roadmap](roadmap.md). These are explicit outstanding gates,
+not claims that external credentials, event approval, or GPU runs are already available.
 
 | Judge lens | Evidence in the project |
 |---|---|

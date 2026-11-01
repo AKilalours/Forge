@@ -25,6 +25,7 @@
   <a href="https://akilalours.github.io/Forge/tour/"><b>Guided app tour ↗</b></a> ·
   <a href="docs/evidence.md"><b>Current evidence</b></a> ·
   <a href="docs/evaluation.md"><b>Historical evaluation</b></a> ·
+  <a href="docs/roadmap.md"><b>Readiness gates</b></a> ·
 </p>
 
 <p align="center">
@@ -210,8 +211,10 @@ python scripts/benchmark_serving.py
 ```
 
 It reports first-request model-load time, warm p50/p95/p99 latency, throughput, status
-codes, and errors at concurrency 1/2/4. It uses 20–500 requests per point and is a bounded
-capacity probe, not a statistically powered SLO or cost study.
+codes, and errors at caller-selected concurrency levels (default 1/2/4). It supports
+20–5,000 requests per point for bounded capacity profiles. Remote targets require the
+explicit `--allow-remote` flag. See the [readiness gates](docs/roadmap.md) for the
+production profile and its safety conditions; the committed Mac result is not an SLO.
 
 ### Run it
 

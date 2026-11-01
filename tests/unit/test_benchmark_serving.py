@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.benchmark_serving import percentile, validate_base_url
+from scripts.benchmark_serving import parse_concurrency_levels, percentile, validate_base_url
 
 
 def test_nearest_rank_percentile_uses_observed_values_only():
@@ -36,6 +36,16 @@ def test_service_url_rejects_non_http_or_embedded_request_state(url):
 
 def test_localhost_is_the_default_allowed_target():
     assert validate_base_url("http://127.0.0.1:8000", allow_remote=False) == "http://127.0.0.1:8000"
+
+
+def test_production_profile_accepts_a_bounded_concurrency_schedule():
+    assert parse_concurrency_levels("1, 2, 4, 8, 16") == (1, 2, 4, 8, 16)
+
+
+@pytest.mark.parametrize("levels", ["", "1,1", "0,2", "129", "1,two"])
+def test_concurrency_schedule_rejects_empty_duplicate_invalid_or_unbounded_levels(levels):
+    with pytest.raises(ValueError):
+        parse_concurrency_levels(levels)
 
 
 def test_committed_http_benchmark_is_complete_and_contains_no_text():

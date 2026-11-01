@@ -36,6 +36,8 @@ SAMPLE_TEXT = (
     "chair feel like a place where a conversation could continue."
 )
 CONCURRENCY_LEVELS = (1, 2, 4)
+MAX_CONCURRENCY = 128
+MAX_SAMPLES = 5_000
 
 
 def percentile(values: list[float], q: float) -> float:
@@ -57,6 +59,19 @@ def validate_base_url(base_url: str, *, allow_remote: bool) -> str:
     if not allow_remote and parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
         raise ValueError("refusing a non-local target; pass --allow-remote for approved staging")
     return base_url.rstrip("/")
+
+
+def parse_concurrency_levels(raw: str) -> tuple[int, ...]:
+    """Parse a bounded, duplicate-free comma-separated concurrency schedule."""
+    try:
+        levels = tuple(int(item.strip()) for item in raw.split(","))
+    except ValueError as exc:
+        raise ValueError("concurrency levels must be comma-separated integers") from exc
+    if not levels or any(level < 1 or level > MAX_CONCURRENCY for level in levels):
+        raise ValueError(f"concurrency levels must be between 1 and {MAX_CONCURRENCY}")
+    if len(set(levels)) != len(levels):
+        raise ValueError("concurrency levels cannot contain duplicates")
+    return levels
 
 
 def request_once(endpoint: str, timeout_s: float) -> tuple[float, int, str | None]:
@@ -122,12 +137,19 @@ def measure_level(endpoint: str, samples: int, concurrency: int, timeout_s: floa
     }
 
 
-def run(base_url: str, *, samples: int, timeout_s: float, allow_remote: bool) -> dict[str, Any]:
+def run(
+    base_url: str,
+    *,
+    samples: int,
+    concurrency_levels: tuple[int, ...] = CONCURRENCY_LEVELS,
+    timeout_s: float,
+    allow_remote: bool,
+) -> dict[str, Any]:
     origin = validate_base_url(base_url, allow_remote=allow_remote)
     endpoint = f"{origin}/v1/text/analyze"
     cold_ms, cold_status, cold_error = request_once(endpoint, timeout_s)
     levels = []
-    for concurrency in CONCURRENCY_LEVELS:
+    for concurrency in concurrency_levels:
         result = measure_level(endpoint, samples, concurrency, timeout_s)
         levels.append(result)
         print(
@@ -146,7 +168,7 @@ def run(base_url: str, *, samples: int, timeout_s: float, allow_remote: bool) ->
         "workload": {
             "kind": "fixed fictional text; never stored in this artifact",
             "characters": len(SAMPLE_TEXT),
-            "concurrency_levels": list(CONCURRENCY_LEVELS),
+            "concurrency_levels": list(concurrency_levels),
             "samples_per_level": samples,
             "timeout_seconds": timeout_s,
         },
@@ -169,19 +191,25 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", default="http://127.0.0.1:8000")
     parser.add_argument("--samples", type=int, default=30,
-                        help="measured requests per concurrency level (minimum 20)")
+                        help="measured requests per concurrency level (20–5000)")
+    parser.add_argument("--concurrency", default=",".join(map(str, CONCURRENCY_LEVELS)),
+                        help="comma-separated worker levels (default: 1,2,4; each 1–128)")
     parser.add_argument("--timeout", type=float, default=60.0)
     parser.add_argument("--allow-remote", action="store_true",
                         help="permit the fixed fictional sample to reach a non-loopback URL")
     parser.add_argument("--out", type=Path, default=None,
                         help="JSON path; defaults to reports/experiments/serving/<timestamp>.json")
     args = parser.parse_args()
-    if not 20 <= args.samples <= 500:
-        parser.error("--samples must be between 20 and 500 to keep quantiles useful and runs bounded")
+    if not 20 <= args.samples <= MAX_SAMPLES:
+        parser.error(f"--samples must be between 20 and {MAX_SAMPLES} to keep runs bounded")
     if not 0.1 <= args.timeout <= 300:
         parser.error("--timeout must be between 0.1 and 300 seconds")
+    try:
+        concurrency_levels = parse_concurrency_levels(args.concurrency)
+    except ValueError as exc:
+        parser.error(str(exc))
     result = run(args.base_url, samples=args.samples, timeout_s=args.timeout,
-                 allow_remote=args.allow_remote)
+                 allow_remote=args.allow_remote, concurrency_levels=concurrency_levels)
     out = args.out or DEFAULT_OUT / f"http-{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(result, indent=2) + "\n")
