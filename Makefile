@@ -79,7 +79,7 @@ mine:             ## Phase 4: hard negative mining pass
 	$(PY) -m forge.cli mine --config configs/training/hard_negative.yaml
 
 serve:            ## Run the inference API locally
-	$(PY) -m uvicorn api.main:app --reload --port 8000
+	$(PY) -m uvicorn api.forge_app:app --reload --port 8000
 
 up:               ## Start local infra (MinIO, Prometheus, Grafana)
 	docker compose -f infra/docker/docker-compose.yml up -d

@@ -131,6 +131,15 @@ def text_tab() -> None:
         if failure:
             st.error(f"could not fetch the {arm} checkpoint: {failure}")
             return
+        # The scorer's shared cache serves the FastAPI comparison path and can hold both
+        # arms. Streamlit's small-host path scores one arm at a time, so evict the prior
+        # selection when the user switches instead of retaining two 700+ MB models.
+        from forge.inference.scorer import load_arm
+
+        previous_arm = st.session_state.get("_forge_loaded_arm")
+        if previous_arm != arm:
+            load_arm.cache_clear()
+            st.session_state["_forge_loaded_arm"] = arm
         payload = analyse(text, arms=(arm,))
 
     show(text_result(payload), height=1180)
@@ -206,5 +215,5 @@ st.divider()
 # to know it. The byline is what belongs here; the memory constraint is an implementation
 # note and lives in the module docstring.
 st.caption(
-    "Built by Akila Lourdes Miriyala Francis · github.com/AKilalours/Forge_Panagram"
+    "Built by Akila Lourdes Miriyala Francis · github.com/AKilalours/Forge"
 )

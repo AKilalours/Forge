@@ -1,5 +1,9 @@
 # Runbook: the 2026-09-02 run, from generation to a filled results table
 
+> **Historical run log.** This describes the September 2 pod session and its then-current
+> state. Results and later experiments are recorded in [`evidence.md`](evidence.md)
+> and [`evidence.md`](evidence.md).
+
 The state this assumes: 60,000 human documents ingested to `data/silver`, generation of
 both arms running under tmux session `gen` on the pod, writing `/workspace/gen.log`.
 

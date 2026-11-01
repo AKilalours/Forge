@@ -21,7 +21,6 @@ The samples below are real pytest output, not invented.
 
 from __future__ import annotations
 
-import re
 import sys
 from pathlib import Path
 
@@ -110,7 +109,7 @@ def test_a_readme_whose_badge_and_prose_disagree_is_caught() -> None:
     Badge 985, prose 918, CI green for months. The badge check looked at the badge and at
     nothing else, so the sentence under it was free to say whatever it said.
     """
-    md = "Tests-985%20passing\n\n**918 tests**, and the interesting ones are regressions.\n"
+    md = "Tests-985%20collected\n\n**918 tests**, and the interesting ones are regressions.\n"
     disagreeing = [(line, n) for line, n in suite_size_claims(md) if n != 985]
     assert disagreeing == [(3, 918)]
 
@@ -144,10 +143,5 @@ def test_the_committed_readme_agrees_with_itself() -> None:
     md = "\n".join(
         (root / name).read_text() for name in ("README.md", "docs/evidence.md")
     )
-    badge = re.search(r"Tests-(\d+)%20passing", md)
-    assert badge is not None
     claims = suite_size_claims(md)
-    assert claims, "the README no longer states its suite size in prose at all"
-    assert {n for _, n in claims} == {int(badge.group(1))}, (
-        f"README prose claims {claims} against a badge of {badge.group(1)}"
-    )
+    assert not claims, f"the README should not publish an environment-dependent total: {claims}"

@@ -1,9 +1,8 @@
-"""FORGE detection API.
+"""Legacy decision-policy API scaffold; not the active inference application.
 
-Live now: schema, validation, decision policy, abstention, provenance, metrics. The model
-is NOT loaded, because Phase 3 training has not run, and /v1/detect returns 503 with the
-reason rather than a fabricated score. A stub that returns a plausible number is worse
-than an error, because something downstream will build on it.
+Use `api.forge_app:app` for serving trained text arms and image analysis. This older
+module's `/v1/detect` route deliberately returns 501 even after configuration; it remains
+only as a historical scaffold and must not be used for live scoring.
 
 Two rules the response format enforces:
 

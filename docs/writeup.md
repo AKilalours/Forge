@@ -1,7 +1,10 @@
 # FORGE: what failure-driven synthetic data actually bought
 
+> **Historical analysis.** This writeup contains earlier v0.1-min results and is retained as
+> experiment history. The current benchmark record is [docs/evidence.md](evidence.md).
+
 **Failure-Driven Synthetic Data Generation for Robust AI-Content Detection**
-Tier 1 results, September 2026. Code and every run record: `github.com/AKilalours/Forge_Panagram`.
+Tier 1 results, September 2026. Code and every run record: `github.com/AKilalours/Forge`.
 
 ## The question
 

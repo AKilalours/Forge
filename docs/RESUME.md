@@ -1,5 +1,9 @@
 # Where this is, and what is left
 
+> **Historical status snapshot, dated 2026-09-17.** Several items below have since changed;
+> [`evidence.md`](evidence.md) and the committed experiment records are authoritative for
+> results. Check the current source and artifacts before resuming any listed task.
+
 Updated 2026-09-17 after the regeneration, retraining and evaluation were finished.
 
 ## What happened

@@ -1,5 +1,9 @@
 # Runbook: from zero to a first committed result
 
+> **Historical reproduction guide.** The first training and held-out results are already
+> committed. See [`evidence.md`](evidence.md) for current measurements before following
+> this sequence.
+
 Goal: one measured baseline in `docs/evaluation.md`. That single number moves the project
 from "an implementation" to "an experiment", and it costs about **$2**.
 

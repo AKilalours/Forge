@@ -19,6 +19,7 @@ import time
 # and it is a JPEG holding several frames; turning it away rejected ordinary photographs,
 # which are exactly the files this project exists to protect from a false accusation.
 ACCEPTED = {"JPEG", "PNG", "WEBP", "TIFF", "BMP", "GIF", "MPO"}
+MAX_IMAGE_PIXELS = 40_000_000
 NEEDS_DECODER = {
     "HEIC": "HEIC needs pillow-heif installed to decode.",
     "HEIF": "HEIF needs pillow-heif installed to decode.",
@@ -59,6 +60,20 @@ def analyse(data: bytes, filename: str = "upload", with_stability: bool = False,
 
     if not data:
         raise UnsupportedImage("empty upload")
+
+    # Compressed uploads can expand to enormous pixel buffers. Reject them before the
+    # preview, forensic passes, or detector decode the image into memory.
+    try:
+        from PIL import Image
+
+        with Image.open(io.BytesIO(data)) as source:
+            width, height = source.size
+    except Exception:
+        width = height = 0  # the report below provides the format-specific refusal
+    if width * height > MAX_IMAGE_PIXELS:
+        raise UnsupportedImage(
+            f"image dimensions {width}×{height} exceed the {MAX_IMAGE_PIXELS:,}-pixel limit"
+        )
 
     mark = time.perf_counter()
     preview = thumbnail(data)

@@ -52,6 +52,7 @@ from __future__ import annotations
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 MAX_IMAGE_BYTES = 25 * 1024 * 1024
 MAX_TEXT_CHARS = 50_000
@@ -113,14 +114,18 @@ async def analyze_image(
     """
     from forge.image.analysis import UnsupportedImage, analyse
 
-    data = await file.read()
+    # Read one byte beyond the limit so a large upload is rejected without copying the
+    # complete spooled file into this worker's memory.
+    data = await file.read(MAX_IMAGE_BYTES + 1)
     if not data:
         raise HTTPException(status_code=400, detail="empty upload")
     if len(data) > MAX_IMAGE_BYTES:
         raise HTTPException(status_code=413, detail=f"file exceeds {MAX_IMAGE_BYTES} bytes")
 
     try:
-        payload = analyse(data, filename=file.filename or "upload", with_stability=stability)
+        payload = await run_in_threadpool(
+            analyse, data, filename=file.filename or "upload", with_stability=stability
+        )
     except UnsupportedImage as refusal:
         raise HTTPException(status_code=415, detail=str(refusal)) from refusal
     return JSONResponse(payload)

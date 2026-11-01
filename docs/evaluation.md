@@ -1,4 +1,9 @@
-# Evaluation
+# Historical evaluation: v0.1-min
+
+> **Historical snapshot, not the current result.** The tables and conclusions below describe
+> the v0.1-min run from 2026-09-03. The current v0.2-min evaluation, artifacts, caveats, and
+> benchmark results are maintained in [evidence.md](evidence.md). Use that record for current
+> claims; this file is retained to preserve the earlier experiment history.
 
 The ablation table. No cell is filled until the run exists and its `dataset_version`
 and `code_commit` are recorded in `reports/experiments/`.

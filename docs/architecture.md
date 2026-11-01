@@ -28,6 +28,13 @@ human sources -> ingestion -> human data lake
 
 The loop is the project. Everything else is plumbing that makes the loop measurable.
 
+**Implementation status:** this diagram describes the intended research loop, not a fully
+automated production feedback service. Ingestion, generation, training, evaluation, mining,
+and the release-gate primitives exist. The deployed FastAPI app does not yet persist user
+feedback or connect drift alerts and registry promotion to the mining DAG; feedback and
+drift modules are standalone components. Treat the online monitoring-to-atlas edge as
+partial until that integration is measured end to end.
+
 ## Why the loop, specifically
 
 A conventional detector is trained once on whatever synthetic data was convenient and

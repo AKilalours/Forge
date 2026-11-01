@@ -1,7 +1,12 @@
 # Finish line
 
-State now: corpus done and correct (60,000 documents, 100 percent inside the configured
-range), 296 tests green, nothing generated, nothing trained, no results.
+> **Historical runbook, superseded.** This status predates the v0.2-min training and
+> evaluation artifacts. The current measured results are in [`evidence.md`](evidence.md);
+> use the steps below only as a historical reproduction
+> recipe, not as the current project status.
+
+State at the time of this runbook: corpus complete at 60,000 documents, with 296 tests green;
+training and evaluation had not yet run.
 
 This is the shortest path to a completed project. Do not deviate from the order.
 

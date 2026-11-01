@@ -1,6 +1,6 @@
 # FORGE: the long-form record
 
-Every table here is checked against its artifact by `scripts/check_readme_claims.py`, which fails the build when a published figure and its committed JSON disagree. The short version, with the charts, is [docs/index.html](https://akilalours.github.io/Forge_Panagram/) and the [README](../README.md).
+Every table here is checked against its artifact by `scripts/check_readme_claims.py`, which fails the build when a published figure and its committed JSON disagree. The short version, with the charts, is [docs/index.html](https://akilalours.github.io/Forge/) and the [README](../README.md).
 
 ---
 
@@ -932,8 +932,10 @@ themselves, so there is exactly one of each.
 
 ## 🧪 What the Test Suite Is For
 
-**1157 tests**, and the interesting ones are not unit tests. They are regression tests, each
-named after a specific wrong answer this project shipped and then caught:
+The suite includes regression tests named after specific wrong answers this project shipped
+and then caught. CI runs the core suite and the optional orchestration suite in separate
+jobs, so a single collected-test count would depend on which optional dependencies are
+installed:
 
 | Test | The failure it locks out |
 |---|---|
@@ -957,10 +959,10 @@ are written as narratives rather than assertions.
 
 ### Locally
 ```bash
-git clone git@github.com:AKilalours/Forge_Panagram.git
-cd Forge_Panagram
+git clone git@github.com:AKilalours/Forge.git
+cd Forge
 python -m venv .venv && source .venv/bin/activate
-pip install -e ".[serve,image,dev]"
+pip install -e ".[demo,serve,train,data,dev]"
 ```
 
 ```bash
@@ -1008,7 +1010,7 @@ Nothing here is typed in by hand.
 ## 📁 Structure
 
 ```
-Forge_Panagram/
+Forge/
 ├── src/forge/
 │   ├── generation/         # mirror engine: the experiment's one variable
 │   ├── training/           # training loop, checkpoint selection, calibration
@@ -1024,7 +1026,7 @@ Forge_Panagram/
 ├── reports/experiments/    # every committed run record and score array
 ├── docs/                   # evaluation · writeup · data spec
 ├── demo/                   # held-in AI samples for testing the text tab
-└── tests/unit/             # 1157 tests, most named after a real bug
+└── tests/unit/             # unit and regression coverage
 ```
 
 ---

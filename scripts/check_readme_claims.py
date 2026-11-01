@@ -711,17 +711,18 @@ def main(check_test_count: bool = True) -> int:
     if not fpr_badge or not close(fpr_badge.group(1), summary("A")["fpr_budget"], percent=True):
         bad.append("FPR budget badge does not match arm A's summary.json")
 
-    tests_badge = re.search(r"Tests-(\d+)%20passing", md)
+    tests_badge = re.search(r"Tests-(\d+)%20collected", md)
     counted, reason = collected_test_count() if check_test_count else (None, "skipped")
-    if tests_badge is None:
-        bad.append("no test-count badge found")
-    elif counted is not None:
+    # A total count is environment-dependent: the core and orchestration suites have
+    # different optional dependencies and run in separate CI jobs. Only validate a
+    # numeric badge when the README chooses to make that claim.
+    if tests_badge is not None and counted is not None:
         if int(tests_badge.group(1)) != counted:
             bad.append(f"test count badge says {tests_badge.group(1)}, pytest collects {counted}")
-    elif reason.startswith("unparsed"):
+    elif tests_badge is not None and reason.startswith("unparsed"):
         # The check is broken. Saying nothing here is how it went unrun.
         bad.append(f"the test-count badge check did not work: {reason}")
-    elif reason.startswith("unavailable"):
+    elif tests_badge is not None and reason.startswith("unavailable"):
         print(f"note: the test-count badge was not checked. {reason}")
 
     # THE BADGE WAS GATED AND THE PROSE WAS NOT, so the prose drifted. For sixty-seven

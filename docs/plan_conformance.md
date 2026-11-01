@@ -1,5 +1,10 @@
 # Plan conformance audit
 
+> **Historical snapshot, 2026-08-31.** The gap table below predates later implementation
+> and measured runs. In particular, evaluation artifacts now exist and token metrics plus
+> regime split helpers are present in `src/forge/`; consult the current code, CI, and
+> [`evidence.md`](evidence.md) before treating any gap as open.
+
 What the original 40-section plan specified, versus what is actually in this repository.
 Produced by inspecting the source tree, not from recollection. Last audited 2026-08-31.
 

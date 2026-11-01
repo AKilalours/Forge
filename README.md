@@ -5,6 +5,7 @@
 ### *Built by* **Akila Lourdes Miriyala Francis**
 
 <p align="center">
+  <a href="https://github.com/AKilalours/Forge/actions/workflows/ci.yml"><img src="https://github.com/AKilalours/Forge/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI status on master"/></a>
   <img src="https://img.shields.io/badge/Python-3.10%20%7C%203.12-3776AB?style=for-the-badge&logo=python&logoColor=white"/>
   <img src="https://img.shields.io/badge/PyTorch-CPU%20%2B%20CUDA-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white"/>
   <img src="https://img.shields.io/badge/DeBERTa--v3-base-FFB000?style=for-the-badge&logo=huggingface&logoColor=black"/>
@@ -13,15 +14,16 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Tests-1157%20passing-00C853?style=for-the-badge"/>
+  <a href="https://github.com/AKilalours/Forge/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/Test%20suite-CI%20gated-4169E1?style=for-the-badge" alt="Test suite is CI gated"/></a>
   <img src="https://img.shields.io/badge/In--distribution%20AUROC-0.99999-00C853?style=for-the-badge"/>
   <img src="https://img.shields.io/badge/FPR%20budget-0.1%25-0056D2?style=for-the-badge"/>
   <img src="https://img.shields.io/badge/Headline-Partial%20null%20result-FF8F00?style=for-the-badge"/>
 </p>
 
 <p align="center">
-  <a href="docs/evaluation.md"><b>Evaluation</b></a> ·
-  <a href="docs/writeup.md"><b>Writeup</b></a> ·
+  <a href="https://akilalours.github.io/Forge/"><b>Interactive evidence ↗</b></a> ·
+  <a href="docs/evidence.md"><b>Current evidence</b></a> ·
+  <a href="docs/evaluation.md"><b>Historical evaluation</b></a> ·
 </p>
 
 <p align="center">
@@ -93,9 +95,9 @@ a bug with a reproduction rather than a picture nobody can check.</sub>
   banner wording turns on: this reads NO AI DETECTED, never HUMAN.</sub>
 </p>
 
-<sub>Both captures are from the running app. They are one checkpoint behind the thresholds
-quoted elsewhere in this README, so treat the numbers on screen as illustrative of the
-layout and the tables in <a href="docs/evaluation.md">docs/evaluation.md</a> as current.</sub>
+<sub>These captures show the running interface, but their checkpoint predates the current
+evaluation. Treat displayed scores as interface examples; see
+<a href="docs/evidence.md">the current evidence record</a> for measured results.</sub>
 
 ### Two runners, one machine, and a speedup column that means nothing
 
@@ -132,6 +134,10 @@ python scripts/build_evidence_page.py     # rebuild the evidence page
 python scripts/build_readme_charts.py     # rebuild this README's charts
 streamlit run streamlit_app.py            # the deployed interface
 ```
+
+The install command above is for the research and API tools. For the Streamlit interface,
+install its extra too: `pip install -e ".[demo,serve]"`. `make serve` runs the same
+working FastAPI app used by the container deployment.
 
 ### Scope, stated plainly
 
