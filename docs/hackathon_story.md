@@ -42,6 +42,11 @@ for it.
 For a document demo, upload a non-sensitive PDF and explicitly approve Reducto processing.
 For a live Pangram demo, set `PANGRAM_API_KEY` in Streamlit secrets and explicitly approve
 the text transfer. Do not use a private personal document as the competition sample.
+For a credentialed preflight from a trusted local terminal, set provider keys privately
+and run `python scripts/smoke_providers.py --provider both --confirm-external`; type
+`SEND FICTIONAL SAMPLE` only after reviewing that the harness transmits its fixed fictional
+passage and generated fictional PDF. The script records sanitized metadata. See the
+[provider and evidence closure gates](roadmap.md#closure-gates).
 
 ## What the judges can verify
 

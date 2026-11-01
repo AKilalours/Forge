@@ -26,8 +26,14 @@ they are not replaced with mocks or estimated results.
 
 1. Add `PANGRAM_API_KEY` and `REDUCTO_API_KEY` through the deployment's secret manager or
    Streamlit secrets. Never commit them, paste them into chat, or put them in the README.
-2. Use the built-in fictional passage for Pangram and a synthetic one-page PDF for Reducto.
-3. Use the corresponding app consent controls before each external transfer.
+2. From a trusted local terminal with those keys set privately, run
+   `python scripts/smoke_providers.py --provider both --confirm-external` and type
+   `SEND FICTIONAL SAMPLE` at the prompt. The harness sends only its built-in fictional
+   passage and generated one-page fictional PDF, then stores sanitized metadata under
+   `reports/experiments/providers/`. Select `--provider pangram` or `--provider reducto`
+   to test one integration. The harness makes no request if the flag, keys, or typed
+   confirmation are missing. Review the JSON before committing it.
+3. Use the corresponding app consent controls before each external transfer in the live UI.
 4. Save redacted run metadata: provider, timestamp, model/version if returned, status,
    latency, and response schema. Do not save the passage, PDF bytes, or secret values.
 5. Verify the app renders provider signals as optional evidence and makes no authorship

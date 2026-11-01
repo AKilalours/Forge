@@ -175,6 +175,12 @@ enable those optional provider calls. Without keys, the writing and keepsake flo
 locally with the fictional sample. The full interaction design and demo script are in
 [docs/hackathon_story.md](docs/hackathon_story.md).
 
+For an explicitly approved live integration check, set the keys privately in your local
+environment, then run `python scripts/smoke_providers.py --provider both --confirm-external`
+and type `SEND FICTIONAL SAMPLE`. It submits only the built-in fictional passage and a
+generated fictional one-page PDF, and writes redacted metadata without storing content or
+keys. This harness is not evidence of a live test until run with real credentials.
+
 ### Measured infrastructure evidence
 
 The data path has also streamed and cleaned **5,638,371 Common Crawl documents** in
