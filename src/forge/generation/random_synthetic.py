@@ -37,6 +37,7 @@ from pathlib import Path
 from forge.common.schemas import GeneratorSpec, Label, MirrorSpec, SyntheticDocument
 from forge.common.splits import assign_split
 from forge.generation.assignment import (
+    FamilySpec,
     assert_no_held_out,
     assign_decoding,
     assign_family,
@@ -165,7 +166,7 @@ def generate_random(
     #
     # Arm A must be fixed identically to Arm B or the comparison is between a working
     # pipeline and a broken one rather than between two data strategies.
-    prepared: list[tuple[int, object, object, Decoding]] = []
+    prepared: list[tuple[int, RandomSpec, FamilySpec, Decoding]] = []
     for i in range(n):
         spec = spec_for(i, length_pool)
         doc_key = f"rand_{i}"
@@ -173,7 +174,7 @@ def generate_random(
         used.add(fam.family)
         prepared.append((i, spec, fam, assign_decoding(doc_key, grid, spec.target_tokens)))
 
-    by_family: dict[str, list[tuple[int, object, object, Decoding]]] = {}
+    by_family: dict[str, list[tuple[int, RandomSpec, FamilySpec, Decoding]]] = {}
     for item in prepared:
         by_family.setdefault(item[2].family, []).append(item)
 
@@ -208,8 +209,8 @@ def generate_random(
         fam0 = items[0][2]
         gen = build_generator(fam0, backend)
         identity[family] = (
-            getattr(gen, "model_id", fam0.model_id),
-            getattr(gen, "revision", fam0.revision),
+            str(getattr(gen, "model_id", None) or fam0.model_id),
+            str(getattr(gen, "revision", None) or fam0.revision),
             fam0.provider,
         )
         print(f"[random] family={family} documents={len(items)} backend={backend}", flush=True)

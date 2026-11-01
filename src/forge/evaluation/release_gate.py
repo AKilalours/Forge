@@ -21,11 +21,10 @@ def evaluate(metrics: dict, gate: dict, baseline: dict | None = None) -> GateRes
     failures: list[str] = []
 
     def _number(value: object, label: str) -> float | None:
-        try:
-            result = float(value)
-        except (TypeError, ValueError):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
             failures.append(f"{label} must be numeric")
             return None
+        result = float(value)
         if not math.isfinite(result):
             failures.append(f"{label} must be finite")
             return None

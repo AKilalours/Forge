@@ -39,6 +39,7 @@ jobs:
       # streamlit_app.py, sat in the same blind spot. A linter with a hand-written path
       # list checks the paths somebody remembered, which is not the same as the project.
       - run: ruff check .
+      - run: mypy --explicit-package-bases src/forge api
       - run: pytest --cov=forge --cov-report=term-missing
       # Published numbers must still match the artifacts that produced them.
       - run: python scripts/check_readme_claims.py

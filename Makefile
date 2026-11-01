@@ -1,4 +1,4 @@
-.PHONY: help setup install-data install-train lint fmt test spec smoke smoke-mirror min-ingest min-mirror min-smoke min-train ingest mirror train eval mine serve up down clean
+.PHONY: help setup install-data install-train lint typecheck fmt test spec smoke smoke-mirror min-ingest min-mirror min-smoke min-train ingest mirror train eval mine serve up down clean
 
 # WHICH PYTHON. `make setup` creates .venv, so on a laptop these targets run inside it.
 # On a rented GPU pod the package is installed into the image's own site-packages and
@@ -25,8 +25,11 @@ install-train:    ## Install Phase 3 training dependencies
 	$(PIP) install -e ".[train,mining]"
 
 lint:             ## Static checks
-	$(PY) -m ruff check src tests
-	$(PY) -m mypy src || true
+	$(PY) -m ruff check .
+	$(MAKE) typecheck
+
+typecheck:        ## Type-check the Forge library and FastAPI application
+	$(PY) -m mypy --explicit-package-bases src/forge api
 
 fmt:              ## Auto-format
 	$(PY) -m ruff check --fix src tests

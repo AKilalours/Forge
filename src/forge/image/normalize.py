@@ -92,25 +92,27 @@ def normalize_bytes(
     from PIL import Image, ImageOps
 
     with Image.open(io.BytesIO(raw)) as img:
-        img = ImageOps.exif_transpose(img)      # 1
-        img = img.convert("RGB")                # 2
+        oriented = ImageOps.exif_transpose(img)  # 1
+        rgb = oriented.convert("RGB")            # 2
 
-        short_side = min(img.size)
+        short_side = min(rgb.size)
         if short_side < policy.size and not allow_upscale:
             raise ImageTooSmallError(
-                f"image is {img.size[0]}x{img.size[1]}, short side {short_side} is below "
+                f"image is {rgb.size[0]}x{rgb.size[1]}, short side {short_side} is below "
                 f"the policy size {policy.size}. Upscaling would fabricate detail. Pass "
                 "allow_upscale=True on the serving and evaluation paths, where refusing "
                 "an image is not an option."
             )
 
-        left = (img.size[0] - short_side) // 2
-        top = (img.size[1] - short_side) // 2
-        img = img.crop((left, top, left + short_side, top + short_side))   # 3
-        img = img.resize((policy.size, policy.size), Image.LANCZOS)        # 4
+        left = (rgb.size[0] - short_side) // 2
+        top = (rgb.size[1] - short_side) // 2
+        cropped = rgb.crop((left, top, left + short_side, top + short_side))  # 3
+        resized = cropped.resize(
+            (policy.size, policy.size), Image.Resampling.LANCZOS
+        )  # 4
 
         buf = io.BytesIO()
-        img.save(                                                          # 5
+        resized.save(                                                      # 5
             buf,
             format="JPEG",
             quality=policy.jpeg_quality,

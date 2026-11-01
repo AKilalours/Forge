@@ -382,6 +382,7 @@ def test_a_segment_that_fails_once_is_retried(monkeypatch, segments, policy):
     # An hour-long run meets a dropped connection eventually. Without a retry, fifty
     # minutes of good work is lost to one bad minute.
     wrapped, state = _flaky(1)
+    monkeypatch.setattr("forge.ingestion.crawl_core.time.sleep", lambda _: None)
     monkeypatch.setattr("forge.ingestion.crawl_core.stream_segment", wrapped)
     plan = plan_crawl(CRAWL, paths=segments)
 
@@ -399,6 +400,7 @@ def test_a_failed_attempt_emits_nothing(monkeypatch, segments, policy):
     making the corpus smaller than the counts claim with nothing to show for it.
     """
     wrapped, _ = _flaky(1)
+    monkeypatch.setattr("forge.ingestion.crawl_core.time.sleep", lambda _: None)
     monkeypatch.setattr("forge.ingestion.crawl_core.stream_segment", wrapped)
     plan = plan_crawl(CRAWL, paths=segments)
 
@@ -410,6 +412,7 @@ def test_a_failed_attempt_emits_nothing(monkeypatch, segments, policy):
 def test_a_segment_that_never_recovers_is_recorded_not_raised(monkeypatch, segments, policy,
                                                               training_root, tmp_path):
     wrapped, _ = _flaky(99)
+    monkeypatch.setattr("forge.ingestion.crawl_core.time.sleep", lambda _: None)
     monkeypatch.setattr("forge.ingestion.crawl_core.stream_segment", wrapped)
     plan = plan_crawl(CRAWL, paths=segments)
 

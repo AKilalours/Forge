@@ -313,8 +313,10 @@ def run(config: dict | str, smoke: bool = False, resume: str | None = None) -> d
     cfg_early = load(config) if isinstance(config, str) else config
     validate_config(cfg_early)
 
+    from typing import Any, cast
+
     import torch
-    from torch.utils.data import DataLoader
+    from torch.utils.data import DataLoader, Dataset
     from transformers import AutoTokenizer, get_linear_schedule_with_warmup
 
     from forge.modeling.encoder import ForgeConfig, build_model
@@ -380,9 +382,12 @@ def run(config: dict | str, smoke: bool = False, resume: str | None = None) -> d
 
     coll = Collator(tok, max_length=mcfg["max_length"])
     bs = tcfg["batch_size"]
-    dl_train = DataLoader(by_split["train"], batch_size=bs, shuffle=True, collate_fn=coll,
+    # PyTorch accepts indexable lists at runtime, although its stubs only expose Dataset.
+    train_dataset = cast(Dataset[Any], by_split["train"])
+    val_dataset = cast(Dataset[Any], by_split["val"] or by_split["train"])
+    dl_train: DataLoader = DataLoader(train_dataset, batch_size=bs, shuffle=True, collate_fn=coll,
                           num_workers=tcfg.get("num_workers", 2), drop_last=False)
-    dl_val = DataLoader(by_split["val"] or by_split["train"], batch_size=bs * 2,
+    dl_val: DataLoader = DataLoader(val_dataset, batch_size=bs * 2,
                         shuffle=False, collate_fn=coll)
 
     model = build_model(ForgeConfig(

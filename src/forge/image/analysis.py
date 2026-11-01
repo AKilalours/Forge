@@ -37,10 +37,10 @@ def thumbnail(data: bytes, box: int = 640) -> str | None:
         from PIL import Image
 
         with Image.open(io.BytesIO(data)) as img:
-            img = img.convert("RGB")
-            img.thumbnail((box, box))
+            preview = img.convert("RGB")
+            preview.thumbnail((box, box))
             buffer = io.BytesIO()
-            img.save(buffer, format="JPEG", quality=82)
+            preview.save(buffer, format="JPEG", quality=82)
         return "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode()
     except Exception:  # noqa: BLE001 - a missing preview is cosmetic, never fatal
         return None

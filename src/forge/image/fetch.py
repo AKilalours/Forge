@@ -26,7 +26,7 @@ from __future__ import annotations
 import time
 from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from forge.image.manifest import ImageRecord
 from forge.image.normalize import POLICY_V1, ImageTooSmallError, NormalizationPolicy, describe
@@ -52,11 +52,7 @@ class SourceImage:
 class FetchStats:
     requested: int = 0
     stored: int = 0
-    rejected: Counter = None          # reason -> count
-
-    def __post_init__(self) -> None:
-        if self.rejected is None:
-            self.rejected = Counter()
+    rejected: Counter = field(default_factory=Counter)  # reason -> count
 
     def as_dict(self) -> dict:
         return {

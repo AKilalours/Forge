@@ -43,9 +43,9 @@ ATTACK_VERSION = "image_attacks_v1"
 def _open(raw: bytes):
     from PIL import Image, ImageOps
 
-    img = Image.open(io.BytesIO(raw))
-    img = ImageOps.exif_transpose(img)
-    return img.convert("RGB")
+    with Image.open(io.BytesIO(raw)) as img:
+        oriented = ImageOps.exif_transpose(img)
+        return oriented.convert("RGB")
 
 
 def _to_bytes(img, fmt: str = "PNG", **kw) -> bytes:
@@ -69,7 +69,7 @@ def resize(raw: bytes, scale: float = 0.5) -> bytes:
 
     img = _open(raw)
     size = (max(int(img.width * scale), 32), max(int(img.height * scale), 32))
-    return _to_bytes(img.resize(size, Image.LANCZOS))
+    return _to_bytes(img.resize(size, Image.Resampling.LANCZOS))
 
 
 def crop(raw: bytes, keep: float = 0.8) -> bytes:
@@ -192,9 +192,9 @@ def preserves_content(
 
     from PIL import Image
 
-    with Image.open(io.BytesIO(original)) as source, Image.open(io.BytesIO(attacked)) as result:
-        source = source.convert("RGB")
-        result = result.convert("RGB")
+    with Image.open(io.BytesIO(original)) as source_file, Image.open(io.BytesIO(attacked)) as result_file:
+        source = source_file.convert("RGB")
+        result = result_file.convert("RGB")
         # Compare like with like: put the attacked image and the CENTRE of the original at
         # the same size, so scale and border differences are removed and only the content
         # is being judged.

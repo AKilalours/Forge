@@ -47,7 +47,7 @@ from forge.ingestion.crawl_core import (
 
 
 def _read_json_lines(prefix: Path) -> list:
-    rows = []
+    rows: list[dict] = []
     for path in sorted(prefix.parent.glob(prefix.name + "*")):
         rows.extend(json.loads(line) for line in path.read_text().splitlines() if line)
     return rows

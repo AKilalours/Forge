@@ -136,7 +136,9 @@ def occlusion_attribution(detector, data: bytes, grid: int = GRID) -> Attributio
 
         base = float(scores[0])
         cells = (base - scores[1:]).reshape(grid, grid)
-        row, col = np.unravel_index(int(np.argmax(cells)), cells.shape)
+        row, col = (
+            int(value) for value in np.unravel_index(int(np.argmax(cells)), cells.shape)
+        )
         return Attribution(
             grid=grid,
             base_probability=base,

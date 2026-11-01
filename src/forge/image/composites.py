@@ -121,12 +121,12 @@ def build_composite(
     from PIL import Image
 
     with Image.open(io.BytesIO(base)) as base_img, Image.open(io.BytesIO(patch_source)) as patch_img:
-        base_img = base_img.convert("RGB")
-        patch_img = patch_img.convert("RGB").resize(base_img.size)
+        base_rgb = base_img.convert("RGB")
+        patch_rgb = patch_img.convert("RGB").resize(base_rgb.size)
 
-        shape, feather, fraction, box = _geometry(image_id, *base_img.size)
-        mask = _mask(base_img.size, box, shape, feather)
-        blended = Image.composite(patch_img, base_img, mask)
+        shape, feather, fraction, box = _geometry(image_id, *base_rgb.size)
+        mask = _mask(base_rgb.size, box, shape, feather)
+        blended = Image.composite(patch_rgb, base_rgb, mask)
 
         out = io.BytesIO()
         blended.save(out, format="PNG")
@@ -134,7 +134,7 @@ def build_composite(
         # The mask is stored UNFEATHERED for scoring. A soft mask would make IoU depend on
         # an arbitrary threshold, and the question being scored is which pixels came from
         # the patch, which is a hard fact.
-        _mask(base_img.size, box, shape, 0).save(mask_bytes, format="PNG")
+        _mask(base_rgb.size, box, shape, 0).save(mask_bytes, format="PNG")
 
     composite = normalize_bytes(out.getvalue(), policy, allow_upscale=True)
     record = Composite(

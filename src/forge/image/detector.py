@@ -38,6 +38,7 @@ import io
 import os
 from dataclasses import dataclass
 from functools import lru_cache
+from typing import Any
 
 # Tried in order. Overridable with FORGE_IMAGE_DETECTOR, which takes priority and is tried
 # alone: a caller who names a model wants that model, not a silent fallback to another one.
@@ -207,8 +208,8 @@ class ImageDetector:
     model_id: str
     ai_index: int
     labels: tuple[str, ...]
-    model: object
-    processor: object
+    model: Any
+    processor: Any
     polarity_verified: bool = False
     polarity_record: dict | None = None
 

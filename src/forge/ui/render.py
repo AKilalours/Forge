@@ -41,8 +41,7 @@ def banner(*, available: bool, verdict: str | None, probability: float | None,
     needle three quarters of the way toward the red end. Drawn without the boundary, the
     gauge and the headline contradict each other and the honest answer looks like a bug.
     """
-    has_score = probability is not None
-    pct = None if (not available or not has_score) else probability * 100
+    pct = probability * 100 if available and probability is not None else None
     cls = "pending" if not available else VERDICT_CLASS.get(verdict or "", "warn")
     mark = "?" if not available else VERDICT_MARK.get(verdict or "", "~")
     # A NEGATIVE FROM A DETECTOR THAT MISSES HALF ITS TARGETS IS NOT A GREEN TICK. `soft`

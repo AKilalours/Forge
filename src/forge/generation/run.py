@@ -32,7 +32,7 @@ from forge.generation.assignment import (
     held_in_families,
     parse_roster,
 )
-from forge.generation.attributes import HeuristicExtractor, VerbatimCopyError
+from forge.generation.attributes import HeuristicExtractor, MirrorAttributes, VerbatimCopyError
 from forge.generation.generators.base import (
     APIGenerator,
     Decoding,
@@ -105,7 +105,7 @@ class _Work:
     """One document's worth of prepared, model-free work."""
 
     human: HumanRef
-    attrs: object
+    attrs: MirrorAttributes
     spec: FamilySpec
     decoding: Decoding
     prompt: str

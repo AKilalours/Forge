@@ -34,6 +34,7 @@ import json
 import pathlib
 from dataclasses import dataclass
 from functools import lru_cache
+from typing import Any
 
 from forge.common.config import load
 from forge.inference.decision import DecisionPolicy
@@ -65,8 +66,8 @@ class ArmScore:
 class Arm:
     name: str
     experiment: str
-    model: object
-    tokenizer: object
+    model: Any
+    tokenizer: Any
     mcfg: dict
     policy: DecisionPolicy
     summary: dict

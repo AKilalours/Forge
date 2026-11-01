@@ -295,8 +295,8 @@ def make_dataset(
         def __getitem__(self, index: int):
             sample = samples[index]
             with Image.open(io.BytesIO(read_pixels(sample.pixels_ref))) as img:
-                img = img.convert("RGB").resize((image_size, image_size))
-                pixels = torch.from_numpy(_as_array(img).copy()).permute(2, 0, 1).float() / 255.0
+                rgb = img.convert("RGB").resize((image_size, image_size))
+                pixels = torch.from_numpy(_as_array(rgb).copy()).permute(2, 0, 1).float() / 255.0
 
             if sample.mask_ref and read_mask is not None:
                 with Image.open(io.BytesIO(read_mask(sample.mask_ref))) as raw:

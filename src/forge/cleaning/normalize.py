@@ -12,11 +12,16 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Callable
+
+_ftfy_fix: Callable[[str], str] | None = None
 
 try:  # optional
-    from ftfy import fix_text as _ftfy_fix
+    from ftfy import fix_text as _ftfy_import
+
+    _ftfy_fix = _ftfy_import
 except ImportError:  # pragma: no cover - exercised only when ftfy is absent
-    _ftfy_fix = None
+    pass
 
 _SCRIPT_STYLE = re.compile(r"<(script|style)\b[^>]*>.*?</\1>", re.IGNORECASE | re.DOTALL)
 _TAG = re.compile(r"<[^>]+>")

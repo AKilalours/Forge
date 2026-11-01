@@ -30,6 +30,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 EXPERIMENTS = REPO_ROOT / "reports" / "experiments"
@@ -191,7 +192,9 @@ def serving_panel(device: str, *, root: Path | None = None) -> Panel:
         f"{peak.get('batch_windows')}: {_num(peak.get('windows_per_second'))} windows/s, "
         f"{_num(peak.get('speedup_over_batch_1'))}x over batch 1."
     )
-    caveats = [data.get("scope")] if data.get("scope") else []
+    caveats: list[str] = []
+    if data.get("scope"):
+        caveats.append(str(data["scope"]))
     caveats += [str(v) for v in (data.get("caveats") or {}).values()]
     return Panel(
         key=key,
@@ -223,7 +226,9 @@ def threads_panel(*, root: Path | None = None) -> Panel:
         return _absent(key, title, (_rel(path),), status)
 
     rows = data.get("rows", [])
-    top = max(rows, key=lambda r: r.get("speedup_over_one_thread") or 0, default={})
+    top: dict[str, Any] = max(
+        rows, key=lambda r: r.get("speedup_over_one_thread") or 0, default={}
+    )
     repro = data.get("reproducibility", {})
     headline = (
         f"{data.get('host_cpu_count')} cores available. Best observed "
@@ -265,7 +270,7 @@ def spark_panel(*, root: Path | None = None) -> Panel:
         return _absent(key, title, (_rel(path),), status)
 
     rows = data.get("rows", [])
-    top = max(rows, key=lambda r: r.get("speedup") or 0, default={})
+    top: dict[str, Any] = max(rows, key=lambda r: r.get("speedup") or 0, default={})
     headline = (
         f"{data.get('documents_scanned')} documents per configuration, held constant. "
         f"Best compute speedup {_num(top.get('speedup'))}x at "

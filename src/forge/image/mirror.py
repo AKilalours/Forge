@@ -97,11 +97,7 @@ class ImageMirror:
 class MirrorStats:
     attempted: int = 0
     accepted: int = 0
-    rejected: Counter = None
-
-    def __post_init__(self) -> None:
-        if self.rejected is None:
-            self.rejected = Counter()
+    rejected: Counter = field(default_factory=Counter)
 
     def as_dict(self) -> dict:
         return {

@@ -37,7 +37,9 @@ def dhash(raw: bytes, hash_size: int = HASH_SIZE) -> int:
     from PIL import Image
 
     with Image.open(io.BytesIO(raw)) as img:
-        small = img.convert("L").resize((hash_size + 1, hash_size), Image.LANCZOS)
+        small = img.convert("L").resize(
+            (hash_size + 1, hash_size), Image.Resampling.LANCZOS
+        )
         # get_flattened_data replaces getdata in Pillow 14; keep both so the hash is
         # identical across versions. A dedup rule that changes with a library upgrade
         # would silently redefine what "duplicate" means inside a frozen dataset.

@@ -73,7 +73,7 @@ Click any screen to jump straight to that step in the hosted tour.
   </tr>
 </table>
 
-<sub>These are captured UI screens; their displayed score values may lag current evaluation artifacts. The Streamlit demo exposes Text and Image tabs. The robustness panel is available through the FastAPI image route; it is not a separate Streamlit tab.</sub>
+<sub>These are captured UI screens; their displayed score values may lag current evaluation artifacts. The Streamlit demo exposes Text, Image, and Voice Story. The robustness panel is available through the FastAPI image route; it is not a separate Streamlit tab.</sub>
 
 ---
 
@@ -154,6 +154,25 @@ the two sizes is the finding.</sub>
   measurement I got wrong first and what the mistake was.
 - **[reports/experiments/](reports/experiments)** — the committed JSON everything is
   built from.
+
+### Voice Story · a human-led artifact
+
+Forge's new **Voice Story** flow starts from a passage the writer chooses, offers exact
+source excerpts, and asks the writer to explain what the detail means to them. It exports a
+self-contained narrated keepsake using only their chosen words and answers. Pangram
+segment signals and Reducto PDF/DOCX parsing are optional, require a separate consent action,
+and never become an authorship verdict. A matching [Hermes reflection skill](.hermes/skills/forge-voice-story/SKILL.md)
+helps guide the same one-question-at-a-time conversation.
+
+```bash
+pip install -e ".[demo,serve,hackathon]"
+streamlit run streamlit_app.py
+```
+
+Set `PANGRAM_API_KEY` and/or `REDUCTO_API_KEY` in the environment or Streamlit secrets to
+enable those optional provider calls. Without keys, the writing and keepsake flow works
+locally with the fictional sample. The full interaction design and demo script are in
+[docs/hackathon_story.md](docs/hackathon_story.md).
 
 ### Run it
 

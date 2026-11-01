@@ -79,6 +79,9 @@ dist = [
 # Phase 8: serving, monitoring, orchestration
 serve = [
   "fastapi>=0.110",
+  # Imported directly for the non-blocking image route; FastAPI's transitive install alone
+  # did not satisfy the repository's direct-serving dependency contract.
+  "starlette>=0.36",
   "uvicorn[standard]>=0.29",
   # /v1/image/analyze takes an UploadFile. FastAPI raises at import time, not at request
   # time, when this is absent, so omitting it does not degrade the app: it stops it booting.
@@ -143,6 +146,11 @@ onnx = [
 # api/forge_app.py stays the reference one.
 demo = [
   "streamlit>=1.36",
+]
+hackathon = [
+  # Optional, consent-gated document parsing and text-signal integrations for Voice Story.
+  "pangram-sdk",
+  "reductoai",
 ]
 dev = [
   "pytest>=8.1",

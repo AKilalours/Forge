@@ -53,7 +53,7 @@ def analyse(text: str, arms: tuple[str, ...] | None = None) -> dict:
         raise ValueError(f"unknown arm(s) {unknown}, expected a subset of {ARMS}")
 
     words = len(text.split())
-    arms: list[dict] = []
+    arm_results: list[dict] = []
     unavailable: dict[str, str] = {}
 
     for name in selected:
@@ -73,7 +73,7 @@ def analyse(text: str, arms: tuple[str, ...] | None = None) -> dict:
             continue
 
         decision = decide(scored.mean, arm.policy)
-        arms.append({
+        arm_results.append({
             "arm": scored.arm,
             "label": scored.label,
             "verdict": decision.verdict.value,
@@ -91,9 +91,9 @@ def analyse(text: str, arms: tuple[str, ...] | None = None) -> dict:
         })
 
     return {
-        "available": bool(arms),
+        "available": bool(arm_results),
         "words": words,
-        "arms": arms,
+        "arms": arm_results,
         "unavailable": unavailable,
         "aggregation": "mean over windows; max shown alongside because it inflates FPR",
         "caveat": CAVEAT,

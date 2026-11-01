@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 import numpy as np
 
@@ -61,7 +61,7 @@ class SentenceTransformerEmbedder:  # pragma: no cover - needs a download
 
     def __init__(self, model_id: str = "sentence-transformers/all-mpnet-base-v2") -> None:
         self.model_id = model_id
-        self._m = None
+        self._m: Any = None
         self.dim = 768
 
     def embed(self, texts: list[str]) -> np.ndarray:

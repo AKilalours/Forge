@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 UNPINNED_MARKERS = ("TODO_PIN_AT_FIRST_RUN", "main", "", None)
 
@@ -329,7 +329,7 @@ class TransformersGenerator:
         self.model_id = model_id
         self.revision = require_pinned_revision(family, revision)
         self.device = device
-        self._pipe = None
+        self._pipe: Any = None
 
     def generate(self, prompts: list[str], decoding: Decoding) -> list[str]:  # pragma: no cover
         from transformers import pipeline

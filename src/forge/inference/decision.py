@@ -105,11 +105,12 @@ def decide(score: float, policy: DecisionPolicy, segments: list[dict] | None = N
     if not 0.0 <= score <= 1.0:
         raise ValueError(f"score {score} is not a probability")
 
-    if policy.abstains and policy.abstain_low <= score < policy.abstain_high:
+    low, high = policy.abstain_low, policy.abstain_high
+    if low is not None and high is not None and low <= score < high:
         verdict, abstained = Verdict.UNCERTAIN, True
         reason = (
             f"score {score:.3f} falls in the uncertain band "
-            f"[{policy.abstain_low:.3f}, {policy.abstain_high:.3f}); no claim is made"
+            f"[{low:.3f}, {high:.3f}); no claim is made"
         )
     else:
         verdict = Verdict.AI if score >= policy.threshold else Verdict.HUMAN

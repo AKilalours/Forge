@@ -100,6 +100,8 @@ def pin_revisions(
             continue
         try:
             sha = api.model_info(fam["model_id"]).sha
+            if sha is None:
+                raise ValueError("model repository returned no commit SHA")
         except Exception as e:
             typer.secho(f"  {fam['family']:<10} FAILED  {fam['model_id']}: {e}", fg=typer.colors.RED)
             typer.echo("     gated model? accept its license on huggingface.co and set HF_TOKEN")
