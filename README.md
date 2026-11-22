@@ -29,7 +29,7 @@
 </p>
 
 <p align="center">
-  <a href="https://panagramforge-cqzwwskdjhbfv6hxwppvkz.streamlit.app"><b>▶ Live demo</b></a>
+  <a href="https://panagramforge.streamlit.app"><b>▶ Live demo</b></a>
   <br/>
   <sub><i>Streamlit Community Cloud sleeps when idle. First load takes about two minutes
   while the container wakes and the checkpoint downloads. The evidence above does not.</i></sub>
